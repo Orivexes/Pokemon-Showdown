@@ -159,6 +159,9 @@ var User = (function () {
 		this.challengesFrom = {};
 		this.challengeTo = null;
 		this.lastChallenge = 0;
+		
+		// tournament role
+		this.tourRole = '';
 
 		// initialize
 		users[this.userid] = this;
