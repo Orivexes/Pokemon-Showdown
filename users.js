@@ -162,6 +162,7 @@ var User = (function () {
 		
 		// tournament role
 		this.tourRole = '';
+		this.tourOpp = '';
 
 		// initialize
 		users[this.userid] = this;

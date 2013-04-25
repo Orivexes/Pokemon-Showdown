@@ -55,14 +55,16 @@ var tourSignup = [];
 var tourTier = '';
 var tourRound = 0;
 var tourSize = 0;
+var tourMoveOn = [];
+var tourRoundSize = 0;
 
 var tourTierList = ['OU','UU','RU','NU','Random Battle','Ubers','Tier Shift','Challenge Cup 1-vs-1','Hackmons','Balanced Hackmons','LC','Smogon Doubles','Doubles Random Battle','Doubles Challenge Cup','Glitchmons'];
 var tourTierString = '';
 for (var i = 0; i < tourTierList.length; i++) {
-	if ((TourTierList.length - 1) > i) {
-	tourTierString = tourTierString + TourTierList[i] + ', ';
+	if ((tourTierList.length - 1) > i) {
+	tourTierString = tourTierString + tourTierList[i] + ', ';
 	} else {
-	tourTierString = tourTierString + TourTierList[i];
+	tourTierString = tourTierString + tourTierList[i];
 	}
 }
 	
@@ -157,7 +159,7 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 			emit(socket, 'console', 'Proper syntax for this command: /tour tier, size');
 			return false;
 		}
-		if (targets[1] < 4) {
+		if (targets[1] < 1) {
 			emit(socket, 'console', 'Tournaments must contain 4 or more people.');
 			return false;
 		}
@@ -167,27 +169,316 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 		tourSigyn = true;
 		tourSignup = [];		
 		
-		room.addRaw('<hr /><h2><font color="green">' + sanitize(user.name) + ' has started a ' + tourTier + ' Tournament.</font> <font color="red">/j</font> <font color="green">to join!</font></h2><b><font color="blueviolet">PLAYERS:</font></b> ' + tourSize + '<br /><font color="blue"><b>TIER:</b></font> ' + tourTier + '<hr />');
+		room.addRaw('<h2><font color="green">' + sanitize(user.name) + ' has started a ' + tourTier + ' Tournament.</font> <font color="red">/j</font> <font color="green">to join!</font></h2><b><font color="blueviolet">PLAYERS:</font></b> ' + tourSize + '<br /><font color="blue"><b>TIER:</b></font> ' + tourTier + '<hr />');
 		
 		return false;
 		break;
 		
+	case 'oriwinners':
+		emit(socket, 'console', tourMoveOn + ' --- ' + tourBracket);
+		return false;
+		break;
+		
+		
 	case 'jointour':
 	case 'jt':
 	case 'j':
-		if ((!tourActive) || tourSigyn) {
+		if ((!tourSigyn) || tourActive) {
 			emit(socket, 'console', 'There is already a tournament running, or there is not any tournament to join.');
 			return false;
 		}
 		var tourGuy = user.userid;
 		if (addToTour(tourGuy)) {
 			room.addRaw('<b>' + user.name + '</b> has joined the tournament. <b><i>' + (tourSize - tourSignup.length) + ' slots remaining.</b></i>');
+			if(tourSize == tourSignup.length) {
+				beginTour();
+			}
 		} else {
 			emit(socket, 'console', 'You could not enter the tournament.  You may already be in the tournament  Type /lt if you want to leave the tournament.');
 		}
 		return false;
 		break;
+	
+	case 'leavetour':
+	case 'lt':
+		if ((!tourSigyn) && (!tourActive)) {
+			emit(socket, 'console', 'There is no tournament to leave.');
+			return false;
+		}
+		var spotRemover = false;
+		if (tourSigyn) {
+			for(var i=0;i<tourSignup.length;i++) {
+				emit(socket, 'console', tourSignup[1]);
+				if (user.userid === tourSignup[i]) {
+					tourSignup.splice(i,1);
+					spotRemover = true;
+					}
+				}
+			if (spotRemover) {
+				room.addRaw('<b>' + user.name + '</b> has left the tournament. <b><i>' + (tourSize - tourSignup.length) + ' slots remaining.</b></i>');
+			}
+		} else if (tourActive) {
+			var tourBrackCur;
+			var tourDefWin;
+			for(var i=0;i<tourBracket.length;i++) {
+					tourBrackCur = tourBracket[i];
+					if (tourBrackCur[0] == user.userid) {
+						tourDefWin = Users.get(tourBrackCur[1]);
+						if (tourDefWin) {
+							spotRemover = true;
+							tourDefWin.tourRole = 'winner';
+							tourDefWin.tourOpp = '';
+							user.tourRole = '';
+							user.tourOpp = '';
+						}
+					}
+					if (tourBrackCur[1] == user.userid) {
+						tourDefWin = Users.get(tourBrackCur[0]);
+						if (tourDefWin) {
+							spotRemover = true;
+							tourDefWin.tourRole = 'winner';
+							tourDefWin.tourOpp = '';
+							user.tourRole = '';
+							user.tourOpp = '';
+						}
+					}
+				}
+			if (spotRemover) {
+				room.addRaw('<b>' + user.name + '</b> has left the tournament. <b><i>');
+			}
+		}
+		if (!spotRemover) {
+			emit(socket, 'console', 'You cannot leave this tournament.  Either you did not enter the tournament, or your opponent is unavailable.');
+			}
+		return false;
+		break;
 			
+	case 'forceleave':
+	case 'fl':
+	case 'flt':
+		if (!user.can('broadcast')) {
+			emit(socket, 'console', 'You do not have enough authority to use this command.');
+			return false;
+		}
+		if (!tourSigyn) {
+			emit(socket, 'console', 'There is no tournament in a sign-up phase.  Use /dq username if you wish to remove someone in an active tournament.');
+			return false;
+		}
+		if (!target) {
+			emit(socket, 'console', 'Please specify a user to kick from this signup.');
+			return false;
+		}
+		var targetUser = Users.get(target);
+		if (targetUser){
+			target = targetUser.userid;
+			}
+
+		var spotRemover = false;
+
+			for(var i=0;i<tourSignup.length;i++) {
+				//emit(socket, 'console', tourSignup[1]);
+				if (target === tourSignup[i]) {
+					tourSignup.splice(i,1);
+					spotRemover = true;
+					}
+				}
+		if (spotRemover) {
+				room.addRaw('The user <b>' + target + '</b> has left the tournament by force. <b><i>' + (tourSize - tourSignup.length) + ' slots remaining.</b></i>');
+			} else {
+				emit(socket, 'console', 'The user that you specified is not in the tournament.');
+			}
+		return false;
+		break;
+	
+	case 'vr':
+	case 'viewround':
+	if (!user.can('broadcast')) {
+			emit(socket, 'console', 'You do not have enough authority to use this command.');
+			return false;
+	}
+	if (!tourActive) {
+			emit(socket, 'console', 'There is no active tournament running.');
+			return false;
+	}
+	if (tourRound == 1) {
+		rooms.lobby.addRaw('<hr /><h3><font color="green">The ' + tourTier + ' tournament has begun!</font></h3><font color="blue"><b>TIER:</b></font> ' + tourTier );
+	} else {
+		rooms.lobby.addRaw('<hr /><h3><font color="green">Round '+ tourRound +'!</font></h3><font color="blue"><b>TIER:</b></font> ' + tourTier );
+	}
+	var tourBrackCur;
+	for(var i = 0;i < tourBracket.length;i++) {
+		tourBrackCur = tourBracket[i];
+		if (!(tourBrackCur[0] === 'bye') && !(tourBrackCur[1] === 'bye')) {
+			rooms.lobby.addRaw(' - ' + getTourColor(tourBrackCur[0]) + ' VS ' + getTourColor(tourBrackCur[1]));
+		} else if (tourBrackCur[0] === 'bye') {
+			rooms.lobby.addRaw(' - ' + tourBrackCur[1] + ' has recieved a bye!');
+		} else if (tourBrackCur[1] === 'bye') {
+			rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' has recieved a bye!');
+		} else {
+			rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' VS ' + tourBrackCur[1]);
+		}
+	}
+	var tourfinalcheck = tourBracket[0];
+	if ((tourBracket.length == 1) && (!(tourfinalcheck[0] === 'bye') || !(tourfinalcheck[1] === 'bye'))) {
+		rooms.lobby.addRaw('This match is the finals!  Good luck!');
+	}
+	rooms.lobby.addRaw('<hr />');
+	return false; 
+	break;
+	
+	case 'remind':
+		if (!user.can('broadcast')) {
+			emit(socket, 'console', 'You do not have enough authority to use this command.');
+			return false;
+		}
+		if (!tourSigyn) {
+				emit(socket, 'console', 'There is no tournament to sign up for.');
+				return false;
+		}
+		room.addRaw('<hr /><h2><font color="green">Please sign up for the ' + tourTier + ' Tournament.</font> <font color="red">/j</font> <font color="green">to join!</font></h2><b><font color="blueviolet">PLAYERS:</font></b> ' + tourSize + '<br /><font color="blue"><b>TIER:</b></font> ' + tourTier + '<hr />');
+		return false;
+		break;
+		
+	case 'replace':
+	
+		if (!user.can('broadcast')) {
+			emit(socket, 'console', 'You do not have enough authority to use this command.');
+			return false;
+		}
+		if (!tourActive) {
+			emit(socket, 'console', 'The tournament is currently in a sign-up phase or is not active, and replacing users only works mid-tournament.');
+			return false;
+		}
+		if (!target) {
+			emit(socket, 'console', 'Proper syntax for this command is: /replace user1, user2.  User 2 will replace User 1 in the current tournament.');
+			return false;
+		}
+		var targets = splittyDiddles(target);
+		if (!targets[1]) {
+			emit(socket, 'console', 'Proper syntax for this command is: /replace user1, user2.  User 2 will replace User 1 in the current tournament.');
+			return false;
+		}
+		var userOne = Users.get(targets[0]); 
+		var userTwo = Users.get(targets[1]);
+		if (!userTwo) {
+			emit(socket, 'console', 'Proper syntax for this command is: /replace user1, user2.  The user you specified to be placed in the tournament is not present!');
+			return false;
+		} else {
+			targets[1] = userTwo.userid;
+		}
+		if (userOne) {
+			targets[0] = userOne.userid;
+		}
+		var tourBrackCur = [];
+		var replaceSuccess = false;
+		//emit(socket, 'console', targets[0] + ' - ' + targets[1]);
+		for (var i = 0; i < tourBracket.length; i++) {
+			tourBrackCur = tourBracket[i];
+			if (tourBrackCur[0] === targets[0]) {
+				tourBrackCur[0] = targets[1];
+				userTwo.tourRole = 'participant';
+				userTwo.tourOpp = tourBrackCur[1];
+				var oppGuy = Users.get(tourBrackCur[1]);
+				if (oppGuy) {
+					if (oppGuy.tourOpp === targets[0]) {
+						oppGuy.tourOpp = targets[1];
+						}
+					}
+				replaceSuccess = true;
+				}
+			if (tourBrackCur[1] === targets[0]) {
+				tourBrackCur[1] = targets[1];
+				userTwo.tourRole = 'participant';
+				userTwo.tourOpp = tourBrackCur[0];
+				var oppGuy = Users.get(tourBrackCur[0]);
+				if (oppGuy) {
+					if (oppGuy.tourOpp === targets[0]) {
+						oppGuy.tourOpp = targets[1];
+						}
+					}
+				replaceSuccess = true;
+				}
+			if (tourMoveOn[i] === targets[0]) {
+				tourMoveOn[i] = targets[1];
+				userTwo.tourRole = 'winner';
+				userTwo.tourOpp = '';
+			} else if (!(tourMoveOn[i] === '')) {
+				userTwo.tourRole = '';
+				userTwo.tourOpp = '';
+			}
+		}
+		if (replaceSuccess) {
+			room.addRaw('<b>' + targets[0] +'</b> has left the tournament and is replaced by <b>' + targets[1] + '</b>.');
+			} else {
+			emit(socket, 'console', 'The user you indicated is not in the tournament!');
+			}
+	return false;
+	break;
+	
+	case 'endtour':
+		if (!user.can('broadcast')) {
+			emit(socket, 'console', 'You do not have enough authority to use this command.');
+			return false;
+		}
+		tourActive = false;
+		tourSigyn = false;
+		tourBracket = [];
+		tourSignup = [];
+		tourTier = '';
+		tourRound = 0;
+		tourSize = 0;
+		tourMoveOn = [];
+		tourRoundSize = 0;
+		room.addRaw('<h2><b>' + user.name + '</b> has ended the tournament.</h2>');
+		return false;
+		break;
+	
+	case 'dq':
+	case 'disqualify':
+		if (!user.can('broadcast')) {
+			emit(socket, 'console', 'You do not have enough authority to use this command.');
+			return false;
+		}
+		if (!target) {
+			emit(socket, 'console', 'Proper syntax for this command is: /dq username');
+			return false;
+		}
+		var targetUser = Users.get(target);
+		if (!targetUser) {
+			emit(socket, 'console', 'That user does not exist!');
+			return false;
+		}
+		if (!tourActive) {
+			emit(socket, 'console', 'There is no tournament running at this time!');
+			return false;
+		}
+		var dqGuy = targetUser.userid;
+		var tourBrackCur;
+		var posCheck = false;
+		for(var i = 0;i < tourBracket.length;i++) {
+			tourBrackCur = tourBracket[i];
+			if (tourBrackCur[0] === dqGuy) {
+				var finalGuy = Users.get(tourBrackCur[1]);
+				finalGuy.tourRole = 'winner';
+				targetUser.tourRole = '';
+				posCheck = true;
+				}
+			if (tourBrackCur[1] === dqGuy) {
+				var finalGuy = Users.get(tourBrackCur[0]);
+				finalGuy.tourRole = 'winner';
+				targetUser.tourRole = '';
+				posCheck = true;
+				}
+			}
+		if (posCheck) {
+			room.addRaw('<b>' + targetUser.name + '</b> has been disqualified.');
+		} else {
+			emit(socket, 'console', 'That user was not in the tournament!');
+		}
+		return false;
+		break;
+		
+		
 	//CURRENCY COMMANDS
 	//POKEBUCKSS
 	
@@ -2775,7 +3066,12 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 
 	// remove zalgo
 	message = message.replace(/[\u0300-\u036f]{3,}/g,'');
-
+	
+	//check for tour winners
+	if (tourActive) {
+	checkForWins();
+	}
+	
 	return message;
 }
 
@@ -3446,12 +3742,126 @@ function beginTour() {
 if(tourSignup.length > tourSize) {
 	return false;
 	} else {
-	lobby.addRaw('<hr /><h3><font color="green">The ' + tourTier + ' tournament has begun!</font></h3><b><font color="blueviolet">PLAYERS:</font></b> ' + tourSize + '<br /><font color="blue"><b>TIER:</b></font> ' + tourTier);
+	tourRound = 0;
+	tourSigyn = false;
+	tourActive = true;
 	beginRound();
-	}
+	return true;
+		}
 }
 
+function checkForWins() {
+	
+	var p1win = '';
+	var p2win = '';
+	var tourBrackCur = [];
+	
+	for(var i = 0;i < tourBracket.length;i++) {
+		tourBrackCur = tourBracket[i];
+		p1win = Users.get(tourBrackCur[0]);
+		p2win = Users.get(tourBrackCur[1]);
+		//rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' , ' + tourBrackCur[1]);
+		if (tourMoveOn[i] == '') {
+
+
+		/*
+			if (((!p2win) || (tourBrackCur[1] = 'bye')) && (p1win.tourRole === 'winner')) {
+				p1win.tourRole = '';
+				p2win.tourOpp = '';
+				tourMoveOn.push(tourBrackCur[0]);
+				rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has won their match and will move on to the next round!');
+
+			}
+			if (((!p2win) || (tourBrackCur[0] = 'bye')) && (p2win.tourRole === 'winner')) {
+				p2win.tourRole = '';
+				p2win.tourOpp = '';
+				tourMoveOn.push(tourBrackCur[1]);
+				rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has won their match and will move on to the next round!');
+
+			}*/
+			if (tourBrackCur[0] === 'bye') {
+				p2win.tourRole = '';
+				tourMoveOn[i] = tourBrackCur[1];
+				rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has recieved a bye and will move on to the next round!');
+			}
+			if (tourBrackCur[1] === 'bye') {
+				p1win.tourRole = '';
+				tourMoveOn[i] = tourBrackCur[0];
+				rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has recieved a bye and will move on to the next round!');
+			}
+			if (!p1win) {
+				p2win.tourRole = '';
+				tourMoveOn[i] = tourBrackCur[1];
+				rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has recieved a bye and will move on to the next round!');
+			}
+			if (!p2win) {
+				p1win.tourRole = '';
+				tourMoveOn[i] = tourBrackCur[0];
+				rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has recieved a bye and will move on to the next round!');
+			}
+			if ((p1win.tourRole === 'winner') && (tourMoveOn.length == 1)) {
+				p1win.tourRole = '';
+				tourMoveOn[i] = tourBrackCur[0];
+				rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has beat ' + tourBrackCur[1] + '!');
+				finishTour(tourBrackCur[0],tourBrackCur[1]);
+			} else if ((p2win.tourRole === 'winner') && (tourMoveOn.length == 1)) {
+				p2win.tourRole = '';
+				tourMoveOn[i] = tourBrackCur[1];
+				rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has beat ' + tourBrackCur[0] + '!');
+				finishTour(tourBrackCur[1],tourBrackCur[0]);
+			}
+			
+			if (p1win.tourRole === 'winner') {
+				p1win.tourRole = '';
+				tourMoveOn[i] = tourBrackCur[0];
+				rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has beat ' + tourBrackCur[1] + ' and will move on to the next round!');
+
+			} else if (p2win.tourRole === 'winner') {
+				p2win.tourRole = '';
+				tourMoveOn[i] = tourBrackCur[1];
+				rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has beat ' + tourBrackCur[0] + ' and will move on to the next round!');
+			}
+		}
+	}
+	//rooms.lobby.addRaw(tourMoveOn + ', ' + tourBracket);
+	var moveOnCheck = true;
+	for (var i = 0;i < tourRoundSize;i++) {
+		if (tourMoveOn[i] === '') {
+			moveOnCheck = false;
+			}
+	}
+	if (!tourActive) {
+	return;
+	}
+	if (moveOnCheck) {
+	
+		/*if (tourMoveOn.length == 1) {
+			finishTour();
+			return;
+		}*/
+		rooms.lobby.addRaw(tourMoveOn + '- ' + tourBracket);
+		tourSignup = [];
+		for (var i = 0;i < tourRoundSize;i++) {
+			if (!(tourMoveOn[i] === 'bye')) {
+				tourSignup.push(tourMoveOn[i]);
+				}
+		}
+
+		tourSignup = tourMoveOn;
+		beginRound();
+	}
+}
+		
 function beginRound() {
+	for(var i = 0;i < tourSignup.length;i++) {
+		var participantSetter = Users.get(tourSignup[i]);
+		if (!participantSetter) {
+				tourSignup[i] = 'bye';
+			} else {
+				participantSetter.tourRole = 'participant';
+			}
+		}
+	tourBracket = [];
 	var sList = tourSignup;
 	shuffle(sList);
 	do
@@ -3464,14 +3874,97 @@ function beginRound() {
 		}
 	while (sList.length > 0);
 	tourRound++;
-	if (tourRound > 1) {
-	lobby.addRaw('<hr /><h3><font color="green">The ' + tourTier + ' tournament has begun!</font></h3><b><font color="blueviolet">ROUND:</font></b> ' + tourRound + '<br /><font color="blue"><b>TIER:</b></font> ' + tourTier + '<hr />');
-	} else {
+	tourRoundSize = tourBracket.length;
+	//poopycakes
+	tourMoveOn = [];
+	for (var i = 0;i < tourRoundSize;i++) {
+	tourMoveOn.push('');
+	}
 	
+	if (tourRound == 1) {
+		rooms.lobby.addRaw('<hr /><h3><font color="green">The ' + tourTier + ' tournament has begun!</font></h3><font color="blue"><b>TIER:</b></font> ' + tourTier );
+	} else {
+		rooms.lobby.addRaw('<hr /><h3><font color="green">Round '+ tourRound +'!</font></h3><font color="blue"><b>TIER:</b></font> ' + tourTier );
+	}
+	var tourBrackCur;
+	var p1OppSet;
+	var p2OppSet;
+	for(var i = 0;i < tourBracket.length;i++) {
+		tourBrackCur = tourBracket[i];
+		if (!(tourBrackCur[0] === 'bye') && !(tourBrackCur[1] === 'bye')) {
+			rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' VS ' + tourBrackCur[1]);
+			p1OppSet = Users.get(tourBrackCur[0]);
+			p1OppSet.tourOpp = tourBrackCur[1];
+			p2OppSet = Users.get(tourBrackCur[1]);
+			p2OppSet.tourOpp = tourBrackCur[0];
+		} else if (tourBrackCur[0] === 'bye') {
+			rooms.lobby.addRaw(' - ' + tourBrackCur[1] + ' has recieved a bye!');
+			var autoWin = Users.get(tourBrackCur[1]);
+			autoWin.tourRole = '';
+			tourMoveOn[i] = tourBrackCur[0];
+		} else if (tourBrackCur[1] === 'bye') {
+			rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' has recieved a bye!');
+			var autoWin = Users.get(tourBrackCur[0]);
+			autoWin.tourRole = '';
+			tourMoveOn[i] = tourBrackCur[0];
+		} else {
+			rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' VS ' + tourBrackCur[1]);
+		}
+	}
+	var tourfinalcheck = tourBracket[0];
+	if ((tourBracket.length == 1) && (!(tourfinalcheck[0] === 'bye') || !(tourfinalcheck[1] === 'bye'))) {
+		rooms.lobby.addRaw('This match is the finals!  Good luck!');
+	}
+	rooms.lobby.addRaw('<hr />');
+
 	return true;
 }
 
+function finishTour(first,second) {
+		var winnerUser = Users.get(first);
+		var winnerName = winnerUser.name;
+		var winnerPrize = tourbonus * (50 + (25 * tourSize));
+		var secondUser = Users.get(second);
+		var secondName = secondUser.name;
+		var secondPrize = tourbonus * (50 + (10 * tourSize));
+		
+		updateMoney(first, winnerPrize);
+		updateMoney(second, secondPrize);
+		
+		rooms.lobby.addRaw('<h2><font color="green">Congratulations <font color="black">' + winnerName + '</font>!  You have won the ' + tourTier + ' Tournament!</font></h2><b><font color="blueviolet">PRIZE:</font></b> ' + winnerPrize + '<br /><br><font color="blue"><b>SECOND PLACE:</b></font> ' + secondName + '<br><b><font color="blueviolet">PRIZE: </font></b>' + secondPrize + '<hr />');
+		
+		tourActive = false;
+		tourSigyn = false;
+		tourBracket = [];
+		tourSignup = [];
+		tourTier = '';
+		tourRound = 0;
+		tourSize = 0;
+		tourMoveOn = [];
+		tourRoundSize = 0;
+		return true;
+}
 
+function getTourColor(target) {
+	var colorGuy = -1;
+	var tourGuy;
+	for(var i=0;i<tourBracket.length;i++) {
+		tourGuy = tourBracket[i];
+		if ((tourGuy[0] === target) || (tourGuy[1] === target)) {
+			colorGuy = i;	
+		}
+	}
+	if (colorGuy == -1) {
+	return target;
+	}
+	if (tourMoveOn[colorGuy] == '') {
+	return '<b>'+target+'</b>';
+	} else if (tourMoveOn[colorGuy] === target) {
+	return '<b><font color="green">'+target+'</font></b>';
+	} else {
+	return '<b><font color="red">'+target+'</font></b>';
+	}
+}
 
 parseCommandLocal.serverVersion = parseCommandLocal.computeServerVersion();
 
