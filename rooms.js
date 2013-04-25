@@ -56,7 +56,7 @@ var BattleRoom = (function() {
 		}
 	};
 	BattleRoom.prototype.win = function(winner) {
-		this.push('|raw|Users:'+ this.p1.userid + ', ' + this.p2.userid + ', ' + winner);
+		//this.push('|raw|Users:'+ this.p1.userid + ', ' + this.p2.userid + ', ' + winner);
 		
 		if ((this.p1.tourRole === 'participant') && (this.p2.tourRole === 'participant') && (this.p2.tourOpp === this.p1.userid) && (this.p1.tourOpp === this.p2.userid)) {
 			this.push('|raw|' + winner + ' won the tournament round!');

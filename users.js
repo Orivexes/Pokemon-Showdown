@@ -160,6 +160,15 @@ var User = (function () {
 		this.challengeTo = null;
 		this.lastChallenge = 0;
 		
+		//currency and emotes
+		//this.money = 0;
+		//this.emote = [false, false, false, false, false, false, false, false, false, false];
+		//this.tickets = 0;
+		this.temphost = false;
+		this.mark = false;
+		this.ignoremark = false;
+		this.winCounter = 0;
+		
 		// tournament role
 		this.tourRole = '';
 		this.tourOpp = '';
@@ -199,6 +208,8 @@ var User = (function () {
 			return '!'+this.name;
 		} if(this.nameLocked()) {
 			return '#'+this.name;
+		} if(this.mark) {
+			return this.group+'?'+this.name;
 		}
 		return this.group+this.name;
 	};

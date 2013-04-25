@@ -128,7 +128,7 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 		break;
 		
 		
-	//tour commands
+//tour commands
 	case 'tour':
 	case 'starttour':
 		if (!user.can('broadcast')) {
@@ -159,7 +159,7 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 			emit(socket, 'console', 'Proper syntax for this command: /tour tier, size');
 			return false;
 		}
-		if (targets[1] < 1) {
+		if (targets[1] < 4) {
 			emit(socket, 'console', 'Tournaments must contain 4 or more people.');
 			return false;
 		}
@@ -179,6 +179,39 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 		return false;
 		break;
 		
+	case 'toursize':
+		if (!user.can('broadcast')) {
+			emit(socket, 'console', 'You do not have enough authority to use this command.');
+			return false;
+		}
+		if (!tourSigyn) {
+			emit(socket, 'console', 'The tournament size cannot me changed now!');
+			return false;
+		}
+		if (!target) {
+			emit(socket, 'console', 'Proper syntax for this command: /toursize, size');
+			return false;
+		}
+		target = parseInt(target);
+		if (isNaN(target)) {
+			emit(socket, 'console', 'Proper syntax for this command: /tour tier, size');
+			return false;
+		}
+		if (target < 4) {
+			emit(socket, 'console', 'A tournament must have at least 4 people in it.');
+			return false;
+		}
+		if (target < tourSignup.length) {
+			emit(socket, 'console', 'You can\'t boot people from a tournament like this.');
+			return false;
+		}
+		tourSize = target;
+		room.addRaw('<b>' + user.name + '</b> has changed the tournament size to: '+ tourSize +'. <b><i>' + (tourSize - tourSignup.length) + ' slots remaining.</b></i>');
+		if(tourSize == tourSignup.length) {
+			beginTour();
+		}
+		return false;
+		break;
 		
 	case 'jointour':
 	case 'jt':
@@ -208,7 +241,7 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 		var spotRemover = false;
 		if (tourSigyn) {
 			for(var i=0;i<tourSignup.length;i++) {
-				emit(socket, 'console', tourSignup[1]);
+				//emit(socket, 'console', tourSignup[1]);
 				if (user.userid === tourSignup[i]) {
 					tourSignup.splice(i,1);
 					spotRemover = true;
@@ -3839,7 +3872,7 @@ function checkForWins() {
 			finishTour();
 			return;
 		}*/
-		rooms.lobby.addRaw(tourMoveOn + '- ' + tourBracket);
+		//rooms.lobby.addRaw(tourMoveOn + '- ' + tourBracket);
 		tourSignup = [];
 		for (var i = 0;i < tourRoundSize;i++) {
 			if (!(tourMoveOn[i] === 'bye')) {
