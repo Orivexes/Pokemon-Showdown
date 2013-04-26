@@ -173,12 +173,12 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 		
 		return false;
 		break;
-		
+		/*
 	case 'oriwinners':
 		emit(socket, 'console', tourMoveOn + ' --- ' + tourBracket);
 		return false;
 		break;
-		
+		*/
 	case 'toursize':
 		if (!user.can('broadcast')) {
 			emit(socket, 'console', 'You do not have enough authority to use this command.');
@@ -511,7 +511,7 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 		return false;
 		break;
 		
-		
+	//tour commands end
 	//CURRENCY COMMANDS
 	//POKEBUCKSS
 	
@@ -1126,7 +1126,7 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 				}
 		return false;
 		break;
-	/*		
+			
 	case 'removemark':
 		if (user.mark) {
 			user.mark = false;
@@ -1147,7 +1147,7 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 			}
 	return false;
 	break;
-	*/
+	//mod commands end
 
 	case 'me':
 	case 'mee':
@@ -3238,6 +3238,8 @@ parseCommandLocal.computeServerVersion = function() {
 	return hash.digest('hex');
 };
 
+//mod functions
+
 function splittyDoodles(target) {
 	
 	var cmdArr =  target.split(",");
@@ -3998,6 +4000,8 @@ function getTourColor(target) {
 	return '<b><font color="red">'+target+'</font></b>';
 	}
 }
+
+//mod functions end
 
 parseCommandLocal.serverVersion = parseCommandLocal.computeServerVersion();
 
