@@ -128,7 +128,7 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 		break;
 		
 		
-//tour commands
+	//tour commands
 	case 'tour':
 	case 'starttour':
 		if (!user.can('broadcast')) {
@@ -173,12 +173,12 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 		
 		return false;
 		break;
-		/*
+		
 	case 'oriwinners':
 		emit(socket, 'console', tourMoveOn + ' --- ' + tourBracket);
 		return false;
 		break;
-		*/
+		
 	case 'toursize':
 		if (!user.can('broadcast')) {
 			emit(socket, 'console', 'You do not have enough authority to use this command.');
@@ -334,28 +334,28 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 			return false;
 	}
 	if (tourRound == 1) {
-		rooms.lobby.addRaw('<hr /><h3><font color="green">The ' + tourTier + ' tournament has begun!</font></h3><font color="blue"><b>TIER:</b></font> ' + tourTier );
+		Rooms.lobby.addRaw('<hr /><h3><font color="green">The ' + tourTier + ' tournament has begun!</font></h3><font color="blue"><b>TIER:</b></font> ' + tourTier );
 	} else {
-		rooms.lobby.addRaw('<hr /><h3><font color="green">Round '+ tourRound +'!</font></h3><font color="blue"><b>TIER:</b></font> ' + tourTier );
+		Rooms.lobby.addRaw('<hr /><h3><font color="green">Round '+ tourRound +'!</font></h3><font color="blue"><b>TIER:</b></font> ' + tourTier );
 	}
 	var tourBrackCur;
 	for(var i = 0;i < tourBracket.length;i++) {
 		tourBrackCur = tourBracket[i];
 		if (!(tourBrackCur[0] === 'bye') && !(tourBrackCur[1] === 'bye')) {
-			rooms.lobby.addRaw(' - ' + getTourColor(tourBrackCur[0]) + ' VS ' + getTourColor(tourBrackCur[1]));
+			Rooms.lobby.addRaw(' - ' + getTourColor(tourBrackCur[0]) + ' VS ' + getTourColor(tourBrackCur[1]));
 		} else if (tourBrackCur[0] === 'bye') {
-			rooms.lobby.addRaw(' - ' + tourBrackCur[1] + ' has recieved a bye!');
+			Rooms.lobby.addRaw(' - ' + tourBrackCur[1] + ' has recieved a bye!');
 		} else if (tourBrackCur[1] === 'bye') {
-			rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' has recieved a bye!');
+			Rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' has recieved a bye!');
 		} else {
-			rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' VS ' + tourBrackCur[1]);
+			Rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' VS ' + tourBrackCur[1]);
 		}
 	}
 	var tourfinalcheck = tourBracket[0];
 	if ((tourBracket.length == 1) && (!(tourfinalcheck[0] === 'bye') || !(tourfinalcheck[1] === 'bye'))) {
-		rooms.lobby.addRaw('This match is the finals!  Good luck!');
+		Rooms.lobby.addRaw('This match is the finals!  Good luck!');
 	}
-	rooms.lobby.addRaw('<hr />');
+	Rooms.lobby.addRaw('<hr />');
 	return false; 
 	break;
 	
@@ -373,6 +373,7 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 		break;
 		
 	case 'replace':
+	case 'tswitch':
 	
 		if (!user.can('broadcast')) {
 			emit(socket, 'console', 'You do not have enough authority to use this command.');
@@ -476,42 +477,66 @@ function parseCommandLocal(user, cmd, target, room, socket, message) {
 			emit(socket, 'console', 'Proper syntax for this command is: /dq username');
 			return false;
 		}
-		var targetUser = Users.get(target);
-		if (!targetUser) {
-			emit(socket, 'console', 'That user does not exist!');
-			return false;
-		}
+
 		if (!tourActive) {
 			emit(socket, 'console', 'There is no tournament running at this time!');
 			return false;
 		}
-		var dqGuy = targetUser.userid;
-		var tourBrackCur;
-		var posCheck = false;
-		for(var i = 0;i < tourBracket.length;i++) {
-			tourBrackCur = tourBracket[i];
-			if (tourBrackCur[0] === dqGuy) {
-				var finalGuy = Users.get(tourBrackCur[1]);
-				finalGuy.tourRole = 'winner';
-				targetUser.tourRole = '';
-				posCheck = true;
+		var targetUser = Users.get(target);
+		if (!targetUser) {
+			var dqGuy = sanitize(target.toLowerCase());
+			var tourBrackCur;
+			var posCheck = false;
+			for(var i = 0;i < tourBracket.length;i++) {
+				tourBrackCur = tourBracket[i];
+				if (tourBrackCur[0] === dqGuy) {
+					var finalGuy = Users.get(tourBrackCur[1]);
+					finalGuy.tourRole = 'winner';
+					finalGuy.tourOpp = '';
+					//targetUser.tourRole = '';
+					posCheck = true;
+					}
+				if (tourBrackCur[1] === dqGuy) {
+					var finalGuy = Users.get(tourBrackCur[0]);
+					finalGuy.tourRole = 'winner';
+					finalGuy.tourOpp = '';
+					//targetUser.tourRole = '';
+					posCheck = true;
+					}
 				}
-			if (tourBrackCur[1] === dqGuy) {
-				var finalGuy = Users.get(tourBrackCur[0]);
-				finalGuy.tourRole = 'winner';
-				targetUser.tourRole = '';
-				posCheck = true;
-				}
+			if (posCheck) {
+				room.addRaw('<b>' + dqGuy + '</b> has been disqualified.');
+			} else {
+				emit(socket, 'console', 'That user was not in the tournament!');
 			}
-		if (posCheck) {
-			room.addRaw('<b>' + targetUser.name + '</b> has been disqualified.');
+			return false;
 		} else {
-			emit(socket, 'console', 'That user was not in the tournament!');
+			var dqGuy = targetUser.userid;
+			var tourBrackCur;
+			var posCheck = false;
+			for(var i = 0;i < tourBracket.length;i++) {
+				tourBrackCur = tourBracket[i];
+				if (tourBrackCur[0] === dqGuy) {
+					var finalGuy = Users.get(tourBrackCur[1]);
+					finalGuy.tourRole = 'winner';
+					targetUser.tourRole = '';
+					posCheck = true;
+					}
+				if (tourBrackCur[1] === dqGuy) {
+					var finalGuy = Users.get(tourBrackCur[0]);
+					finalGuy.tourRole = 'winner';
+					targetUser.tourRole = '';
+					posCheck = true;
+					}
+				}
+			if (posCheck) {
+				room.addRaw('<b>' + targetUser.name + '</b> has been disqualified.');
+			} else {
+				emit(socket, 'console', 'That user was not in the tournament!');
+			}
+			return false;
 		}
-		return false;
 		break;
-		
-	//tour commands end
 	//CURRENCY COMMANDS
 	//POKEBUCKSS
 	
@@ -3795,7 +3820,7 @@ function checkForWins() {
 		tourBrackCur = tourBracket[i];
 		p1win = Users.get(tourBrackCur[0]);
 		p2win = Users.get(tourBrackCur[1]);
-		//rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' , ' + tourBrackCur[1]);
+		//Rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' , ' + tourBrackCur[1]);
 		if (tourMoveOn[i] == '') {
 
 
@@ -3804,73 +3829,73 @@ function checkForWins() {
 				p1win.tourRole = '';
 				p2win.tourOpp = '';
 				tourMoveOn.push(tourBrackCur[0]);
-				rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has won their match and will move on to the next round!');
+				Rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has won their match and will move on to the next round!');
 
 			}
 			if (((!p2win) || (tourBrackCur[0] = 'bye')) && (p2win.tourRole === 'winner')) {
 				p2win.tourRole = '';
 				p2win.tourOpp = '';
 				tourMoveOn.push(tourBrackCur[1]);
-				rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has won their match and will move on to the next round!');
+				Rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has won their match and will move on to the next round!');
 
 			}*/
 			if (tourBrackCur[0] === 'bye') {
 				p2win.tourRole = '';
 				tourMoveOn[i] = tourBrackCur[1];
-				rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has recieved a bye and will move on to the next round!');
+				Rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has recieved a bye and will move on to the next round!');
 			}
 			if (tourBrackCur[1] === 'bye') {
 				p1win.tourRole = '';
 				tourMoveOn[i] = tourBrackCur[0];
-				rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has recieved a bye and will move on to the next round!');
+				Rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has recieved a bye and will move on to the next round!');
 			}
 			if ((!p1win) && (tourMoveOn.length == 1)) {
 				p2win.tourRole = '';
 				tourMoveOn[i] = tourBrackCur[1];
-				rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has recieved a bye and will move on to the next round!');
+				Rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has recieved a bye and will move on to the next round!');
 				finishTour(tourBrackCur[1],'dud');
 			}
 			if ((!p2win) && (tourMoveOn.length == 1)) {
 				p1win.tourRole = '';
 				tourMoveOn[i] = tourBrackCur[0];
-				rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has recieved a bye and will move on to the next round!');
+				Rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has recieved a bye and will move on to the next round!');
 				finishTour(tourBrackCur[0],'dud');
 			}
 			if (!p1win) {
 				p2win.tourRole = '';
 				tourMoveOn[i] = tourBrackCur[1];
-				rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has recieved a bye and will move on to the next round!');
+				Rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has recieved a bye and will move on to the next round!');
 			}
 			if (!p2win) {
 				p1win.tourRole = '';
 				tourMoveOn[i] = tourBrackCur[0];
-				rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has recieved a bye and will move on to the next round!');
+				Rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has recieved a bye and will move on to the next round!');
 			}
 			if ((p1win.tourRole === 'winner') && (tourMoveOn.length == 1)) {
 				p1win.tourRole = '';
 				tourMoveOn[i] = tourBrackCur[0];
-				rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has beat ' + tourBrackCur[1] + '!');
+				Rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has beat ' + tourBrackCur[1] + '!');
 				finishTour(tourBrackCur[0],tourBrackCur[1]);
 			} else if ((p2win.tourRole === 'winner') && (tourMoveOn.length == 1)) {
 				p2win.tourRole = '';
 				tourMoveOn[i] = tourBrackCur[1];
-				rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has beat ' + tourBrackCur[0] + '!');
+				Rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has beat ' + tourBrackCur[0] + '!');
 				finishTour(tourBrackCur[1],tourBrackCur[0]);
 			}
 			
 			if (p1win.tourRole === 'winner') {
 				p1win.tourRole = '';
 				tourMoveOn[i] = tourBrackCur[0];
-				rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has beat ' + tourBrackCur[1] + ' and will move on to the next round!');
+				Rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has beat ' + tourBrackCur[1] + ' and will move on to the next round!');
 
 			} else if (p2win.tourRole === 'winner') {
 				p2win.tourRole = '';
 				tourMoveOn[i] = tourBrackCur[1];
-				rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has beat ' + tourBrackCur[0] + ' and will move on to the next round!');
+				Rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has beat ' + tourBrackCur[0] + ' and will move on to the next round!');
 			}
 		}
 	}
-	//rooms.lobby.addRaw(tourMoveOn + ', ' + tourBracket);
+	//Rooms.lobby.addRaw(tourMoveOn + ', ' + tourBracket);
 	var moveOnCheck = true;
 	for (var i = 0;i < tourRoundSize;i++) {
 		if (tourMoveOn[i] === '') {
@@ -3886,7 +3911,7 @@ function checkForWins() {
 			finishTour();
 			return;
 		}*/
-		//rooms.lobby.addRaw(tourMoveOn + '- ' + tourBracket);
+		//Rooms.lobby.addRaw(tourMoveOn + '- ' + tourBracket);
 		tourSignup = [];
 		for (var i = 0;i < tourRoundSize;i++) {
 			if (!(tourMoveOn[i] === 'bye')) {
@@ -3929,9 +3954,9 @@ function beginRound() {
 	}
 	
 	if (tourRound == 1) {
-		rooms.lobby.addRaw('<hr /><h3><font color="green">The ' + tourTier + ' tournament has begun!</font></h3><font color="blue"><b>TIER:</b></font> ' + tourTier );
+		Rooms.lobby.addRaw('<hr /><h3><font color="green">The ' + tourTier + ' tournament has begun!</font></h3><font color="blue"><b>TIER:</b></font> ' + tourTier );
 	} else {
-		rooms.lobby.addRaw('<hr /><h3><font color="green">Round '+ tourRound +'!</font></h3><font color="blue"><b>TIER:</b></font> ' + tourTier );
+		Rooms.lobby.addRaw('<hr /><h3><font color="green">Round '+ tourRound +'!</font></h3><font color="blue"><b>TIER:</b></font> ' + tourTier );
 	}
 	var tourBrackCur;
 	var p1OppSet;
@@ -3939,30 +3964,30 @@ function beginRound() {
 	for(var i = 0;i < tourBracket.length;i++) {
 		tourBrackCur = tourBracket[i];
 		if (!(tourBrackCur[0] === 'bye') && !(tourBrackCur[1] === 'bye')) {
-			rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' VS ' + tourBrackCur[1]);
+			Rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' VS ' + tourBrackCur[1]);
 			p1OppSet = Users.get(tourBrackCur[0]);
 			p1OppSet.tourOpp = tourBrackCur[1];
 			p2OppSet = Users.get(tourBrackCur[1]);
 			p2OppSet.tourOpp = tourBrackCur[0];
 		} else if (tourBrackCur[0] === 'bye') {
-			rooms.lobby.addRaw(' - ' + tourBrackCur[1] + ' has recieved a bye!');
+			Rooms.lobby.addRaw(' - ' + tourBrackCur[1] + ' has recieved a bye!');
 			var autoWin = Users.get(tourBrackCur[1]);
 			autoWin.tourRole = '';
 			tourMoveOn[i] = tourBrackCur[0];
 		} else if (tourBrackCur[1] === 'bye') {
-			rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' has recieved a bye!');
+			Rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' has recieved a bye!');
 			var autoWin = Users.get(tourBrackCur[0]);
 			autoWin.tourRole = '';
 			tourMoveOn[i] = tourBrackCur[0];
 		} else {
-			rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' VS ' + tourBrackCur[1]);
+			Rooms.lobby.addRaw(' - ' + tourBrackCur[0] + ' VS ' + tourBrackCur[1]);
 		}
 	}
 	var tourfinalcheck = tourBracket[0];
 	if ((tourBracket.length == 1) && (!(tourfinalcheck[0] === 'bye') || !(tourfinalcheck[1] === 'bye'))) {
-		rooms.lobby.addRaw('This match is the finals!  Good luck!');
+		Rooms.lobby.addRaw('This match is the finals!  Good luck!');
 	}
-	rooms.lobby.addRaw('<hr />');
+	Rooms.lobby.addRaw('<hr />');
 
 	return true;
 }
@@ -3984,7 +4009,7 @@ function finishTour(first,second) {
 			updateMoney(second, secondPrize);
 		}
 		
-		rooms.lobby.addRaw('<h2><font color="green">Congratulations <font color="black">' + winnerName + '</font>!  You have won the ' + tourTier + ' Tournament!</font></h2><b><font color="blueviolet">PRIZE:</font></b> ' + winnerPrize + '<br /><br><font color="blue"><b>SECOND PLACE:</b></font> ' + secondName + '<br><b><font color="blueviolet">PRIZE: </font></b>' + secondPrize + '<hr />');
+		Rooms.lobby.addRaw('<h2><font color="green">Congratulations <font color="black">' + winnerName + '</font>!  You have won the ' + tourTier + ' Tournament!</font></h2><b><font color="blueviolet">PRIZE:</font></b> ' + winnerPrize + '<br /><br><font color="blue"><b>SECOND PLACE:</b></font> ' + secondName + '<br><b><font color="blueviolet">PRIZE: </font></b>' + secondPrize + '<hr />');
 		
 		tourActive = false;
 		tourSigyn = false;
