@@ -1,3 +1,28 @@
+Tournament and Money Mods
+========================================================================
+Hi guys!  Orivexes here, with a bit of instructions on how to use this github.
+
+I'll be honest--I'm not a pro with this sofware.  So the most helpful thing I can suggest is how to get my mods into an existing PS! installation.
+
+Now, I included both the Pokebucks feature as well as the tournament mod I made.  The tour mod is loosely based off of one made by a fellow named Steve.  I don't really know Steve, but he rocks, so kudos to him.  I used some similar formats and command names for familiarity's sake.
+
+How do you get this thing?  Let's see!
+
+1. You'll need a few lines of code from a few different files.  In rooms.js, grab everything from //tourcodestart to //tourcodeend.  (Use Ctrl-F to find 'em!)  Put them in the same location in your file.
+2. In users.js, you'll need to grab two bunches of stuff.  Grab everything from //tourvaluesstart to //tourvaluesend.  You'll also need to replace your function getIdentity with the one you can find at: //getIdentitychanges
+3. That's the easy stuff.  Open up chat-commands.js.  You'll want to now grab everything between //tour commands and //tour commands end.  Directly after //tour commands end, you'll find the code for the money system.  If you'd like it, copy from //tour commands to //mod commands end.  These are all chat commands, so put them in your file like you would any other new commands.
+4. Grab the three lines of code after //check for tour winners.  This allows the chat to check for tournament winners as people type.
+5. Copy and paste everything between //mod functions and //mod functions end to the end of your chat-commands.js file.
+6. You'll want to copy my version of the hotpatch and lockdown commands.  These allow your money to automatically back up when you restart your server or run a hotpatch.
+7. Finally, go to var importMoney and set it to false.  This way, it won't try to read in a blank file when you first run PS!.
+8. Create a file in your config folder called poop.txt.  You can leave it blank.  Yes, it has to be poop.txt.  It's a tradition.
+9. Double-check chat-commands.js.  I think I set some commands to check for the username Orivexes.  Change that to your own username.
+10. Run PS!.  Type /money, then /mmoneybackup (with two m's.)  This'll set you up with a backup.
+11. Set importMoney to true.  Then your money will auto restore!
+12. That's pretty much it, I think.
+
+
+
 Pokemon Showdown
 ========================================================================
 

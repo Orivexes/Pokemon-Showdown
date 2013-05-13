@@ -160,6 +160,7 @@ var User = (function () {
 		this.challengeTo = null;
 		this.lastChallenge = 0;
 		
+		//tourvaluesstart
 		//currency and emotes
 		//this.money = 0;
 		//this.emote = [false, false, false, false, false, false, false, false, false, false];
@@ -172,7 +173,9 @@ var User = (function () {
 		// tournament role
 		this.tourRole = '';
 		this.tourOpp = '';
-
+		//tourvaluesend
+		
+		
 		// initialize
 		users[this.userid] = this;
 		if (connection.banned) {
@@ -203,6 +206,7 @@ var User = (function () {
 			sendData(this.connections[i].socket, data);
 		}
 	};
+	//getIdentitychanges
 	User.prototype.getIdentity = function() {
 		if (this.muted) {
 			return '!'+this.name;
@@ -213,6 +217,7 @@ var User = (function () {
 		}
 		return this.group+this.name;
 	};
+	//getIdentitychangesend
 	User.prototype.can = function(permission, target) {
 		if (this.checkZarelBackdoorPermission()) return true;
 
