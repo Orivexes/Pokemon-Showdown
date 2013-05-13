@@ -3822,6 +3822,18 @@ function checkForWins() {
 				tourMoveOn[i] = tourBrackCur[0];
 				rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has recieved a bye and will move on to the next round!');
 			}
+			if ((!p1win) && (tourMoveOn.length == 1)) {
+				p2win.tourRole = '';
+				tourMoveOn[i] = tourBrackCur[1];
+				rooms.lobby.addRaw(' - <b>' + tourBrackCur[1] + '</b> has recieved a bye and will move on to the next round!');
+				finishTour(tourBrackCur[1],'dud');
+			}
+			if ((!p2win) && (tourMoveOn.length == 1)) {
+				p1win.tourRole = '';
+				tourMoveOn[i] = tourBrackCur[0];
+				rooms.lobby.addRaw(' - <b>' + tourBrackCur[0] + '</b> has recieved a bye and will move on to the next round!');
+				finishTour(tourBrackCur[0],'dud');
+			}
 			if (!p1win) {
 				p2win.tourRole = '';
 				tourMoveOn[i] = tourBrackCur[1];
@@ -3957,12 +3969,18 @@ function finishTour(first,second) {
 		var winnerUser = Users.get(first);
 		var winnerName = winnerUser.name;
 		var winnerPrize = tourbonus * (50 + (25 * tourSize));
-		var secondUser = Users.get(second);
-		var secondName = secondUser.name;
+		if (second === 'dud') {
+				var secondName = 'n/a';
+			} else {
+				var secondUser = Users.get(second);
+				var secondName = secondUser.name;
+		}
 		var secondPrize = tourbonus * (50 + (10 * tourSize));
 		
 		updateMoney(first, winnerPrize);
-		updateMoney(second, secondPrize);
+		if (!(second === 'dud')) {
+			updateMoney(second, secondPrize);
+		}
 		
 		rooms.lobby.addRaw('<h2><font color="green">Congratulations <font color="black">' + winnerName + '</font>!  You have won the ' + tourTier + ' Tournament!</font></h2><b><font color="blueviolet">PRIZE:</font></b> ' + winnerPrize + '<br /><br><font color="blue"><b>SECOND PLACE:</b></font> ' + secondName + '<br><b><font color="blueviolet">PRIZE: </font></b>' + secondPrize + '<hr />');
 		
