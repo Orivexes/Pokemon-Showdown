@@ -1,23 +1,16 @@
 require('sugar');
 
 fs = require('fs');
-if (!fs.existsSync) {
-	// for compatibility with ancient versions of node.js
-	var path = require('path');
-	fs.existsSync = function(loc) { return path.existsSync(loc) };
+if (!('existsSync' in fs)) {
+	// for compatibility with ancient versions of node
+	fs.existsSync = require('path').existsSync;
 }
 config = require('./config/config.js');
 
 if (config.crashguard) {
 	// graceful crash - allow current battles to finish before restarting
 	process.on('uncaughtException', function (err) {
-		console.log("\n"+err.stack+"\n");
-		fs.createWriteStream('logs/errors.txt', {'flags': 'a'}).on("open", function(fd) {
-			this.write("\n"+err.stack+"\n");
-			this.end();
-		}).on("error", function (err) {
-			console.log("\n"+err.stack+"\n");
-		});
+		require('./crashlogger.js')(err, 'A simulator process');
 		/* var stack = (""+err.stack).split("\n").slice(0,2).join("<br />");
 		Rooms.lobby.addRaw('<div><b>THE SERVER HAS CRASHED:</b> '+stack+'<br />Please restart the server.</div>');
 		Rooms.lobby.addRaw('<div>You will not be able to talk in the lobby or start new battles until the server restarts.</div>');
@@ -45,11 +38,11 @@ toUserid = toId;
 /**
  * Validates a username or Pokemon nickname
  */
-var bannedNameStartChars = {'~':1, '&':1, '@':1, '%':1, '+':1, '-':1, '!':1, '?':1, '#':1};
+var bannedNameStartChars = {'~':1, '&':1, '@':1, '%':1, '+':1, '-':1, '!':1, '?':1, '#':1, ' ':1};
 toName = function(name) {
-	name = string(name).trim();
-	name = name.replace(/(\||\n|\[|\]|\,)/g, '');
-	while (bannedNameStartChars[name.substr(0,1)]) {
+	name = string(name);
+	name = name.replace(/[\|\s\[\]\,]+/g, ' ').trim();
+	while (bannedNameStartChars[name.charAt(0)]) {
 		name = name.substr(1);
 	}
 	if (name.length > 18) name = name.substr(0,18);
@@ -323,6 +316,10 @@ var BattlePokemon = (function() {
 						// to run it again.
 						continue;
 					}
+					if ((k === 'DW') && !pokemon.template.dreamWorldRelease) {
+						// unreleased dream world ability
+						continue;
+					}
 					this.battle.singleEvent('FoeMaybeTrapPokemon',
 						this.battle.getAbility(ability), {}, this, pokemon);
 				}
@@ -406,9 +403,12 @@ var BattlePokemon = (function() {
 			thisTurn: true
 		};
 	};
-	BattlePokemon.prototype.getMoves = function() {
+	BattlePokemon.prototype.getLockedMove = function() {
 		var lockedMove = this.battle.runEvent('LockMove', this);
 		if (lockedMove === true) lockedMove = false;
+		return lockedMove;
+	};
+	BattlePokemon.prototype.getMoves = function(lockedMove) {
 		if (lockedMove) {
 			lockedMove = toId(lockedMove);
 			this.trapped = true;
@@ -463,10 +463,14 @@ var BattlePokemon = (function() {
 		return moves;
 	};
 	BattlePokemon.prototype.getRequestData = function() {
-		return {
-			moves: this.getMoves(),
-			maybeTrapped: this.maybeTrapped
-		};
+		var lockedMove = this.getLockedMove();
+		var data = {moves: this.getMoves(lockedMove)};
+		if (lockedMove && this.trapped) {
+			data.trapped = true;
+		} else if (this.maybeTrapped) {
+			data.maybeTrapped = true;
+		}
+		return data;
 	};
 	BattlePokemon.prototype.positiveBoosts = function() {
 		var boosts = 0;
@@ -684,7 +688,7 @@ var BattlePokemon = (function() {
 		return true;
 	};
 	BattlePokemon.prototype.getValidMoves = function() {
-		var pMoves = this.getMoves();
+		var pMoves = this.getMoves(this.getLockedMove());
 		var moves = [];
 		for (var i=0; i<pMoves.length; i++) {
 			if (!pMoves[i].disabled) {
@@ -789,12 +793,16 @@ var BattlePokemon = (function() {
 	BattlePokemon.prototype.getStatus = function() {
 		return this.battle.getEffect(this.status);
 	};
-	BattlePokemon.prototype.eatItem = function(source, sourceEffect) {
+	BattlePokemon.prototype.eatItem = function(item, source, sourceEffect) {
 		if (!this.hp || !this.isActive) return false;
 		if (!this.item) return false;
+
+		var id = toId(item);
+		if (id && this.item !== id) return false;
+
 		if (!sourceEffect && this.battle.effect) sourceEffect = this.battle.effect;
 		if (!source && this.battle.event && this.battle.event.target) source = this.battle.event.target;
-		var item = this.getItem();
+		item = this.getItem();
 		if (this.battle.runEvent('UseItem', this, null, null, item) && this.battle.runEvent('EatItem', this, null, null, item)) {
 			this.battle.add('-enditem', this, item, '[eat]');
 
@@ -808,12 +816,16 @@ var BattlePokemon = (function() {
 		}
 		return false;
 	};
-	BattlePokemon.prototype.useItem = function(source, sourceEffect) {
+	BattlePokemon.prototype.useItem = function(item, source, sourceEffect) {
 		if (!this.isActive) return false;
 		if (!this.item) return false;
+
+		var id = toId(item);
+		if (id && this.item !== id) return false;
+
 		if (!sourceEffect && this.battle.effect) sourceEffect = this.battle.effect;
 		if (!source && this.battle.event && this.battle.event.target) source = this.battle.event.target;
-		var item = this.getItem();
+		item = this.getItem();
 		if (this.battle.runEvent('UseItem', this, null, null, item)) {
 			switch (item.id) {
 			case 'redcard':
@@ -1030,6 +1042,8 @@ var BattleSide = (function() {
 
 	BattleSide.prototype.isActive = false;
 	BattleSide.prototype.pokemonLeft = 0;
+	BattleSide.prototype.faintedLastTurn = false;
+	BattleSide.prototype.faintedThisTurn = false;
 	BattleSide.prototype.decision = null;
 	BattleSide.prototype.foe = null;
 
@@ -2111,6 +2125,8 @@ var Battle = (function() {
 				}
 				pokemon.activeTurns++;
 			}
+			this.sides[i].faintedLastTurn = this.sides[i].faintedThisTurn;
+			this.sides[i].faintedThisTurn = false;
 		}
 		this.add('turn', this.turn);
 		this.makeRequest('move');
@@ -2173,10 +2189,12 @@ var Battle = (function() {
 		if (!target || !target.hp) return 0;
 		effect = this.getEffect(effect);
 		boost = this.runEvent('Boost', target, source, effect, Object.clone(boost));
+		var success = false;
 		for (var i in boost) {
 			var currentBoost = {};
 			currentBoost[i] = boost[i];
 			if (boost[i] !== 0 && target.boostBy(currentBoost)) {
+				success = true;
 				var msg = '-boost';
 				if (boost[i] < 0) {
 					msg = '-unboost';
@@ -2198,6 +2216,7 @@ var Battle = (function() {
 			}
 		}
 		this.runEvent('AfterBoost', target, source, effect, boost);
+		return success;
 	};
 	Battle.prototype.damage = function(damage, target, source, effect) {
 		if (this.event) {
@@ -2608,6 +2627,7 @@ var Battle = (function() {
 				faintData.target.isActive = false;
 				faintData.target.isStarted = false;
 				faintData.target.side.pokemonLeft--;
+				faintData.target.side.faintedThisTurn = true;
 			}
 		}
 		if (!this.p1.pokemonLeft && !this.p2.pokemonLeft) {
@@ -2955,6 +2975,15 @@ var Battle = (function() {
 		this.midTurn = false;
 		this.queue = [];
 	};
+	/**
+	 * Changes a pokemon's decision.
+	 *
+	 * The un-modded game should not use this function for anything,
+	 * since it rerolls speed ties (which messes up RNG state).
+	 *
+	 * You probably want the OverrideDecision event (which doesn't
+	 * change priority order).
+	 */
 	Battle.prototype.changeDecision = function(pokemon, decision) {
 		this.cancelDecision(pokemon);
 		if (!decision.pokemon) decision.pokemon = pokemon;

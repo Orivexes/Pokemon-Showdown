@@ -163,11 +163,6 @@ var Simulator = (function(){
 			}
 			break;
 
-		case 'resendrequest':
-			var player = this.getPlayer(lines[2]);
-			this.resendRequest(player);
-			break;
-
 		case 'log':
 			this.logData = JSON.parse(lines[2]);
 			break;
@@ -179,10 +174,10 @@ var Simulator = (function(){
 	};
 
 	Simulator.prototype.resendRequest = function(user) {
-		// The !user condition can occur. Do not remove this check.
-		if (!user) return;
-		user.emit('update', JSON.parse(this.requests[user.userid]));
-		user.sendTo(this.id, '|callback|decision');
+		if (this.requests[user.userid]) {
+			user.emit('update', JSON.parse(this.requests[user.userid]));
+			user.sendTo(this.id, '|callback|decision');
+		}
 	};
 	Simulator.prototype.win = function(user) {
 		if (!user) {
@@ -201,6 +196,17 @@ var Simulator = (function(){
 		this.send('chat', user.name+"\n"+message);
 	};
 
+	Simulator.prototype.isEmpty = function() {
+		if (this.p1) return false;
+		if (this.p2) return false;
+		return true;
+	};
+
+	Simulator.prototype.isFull = function() {
+		if (this.p1 && this.p2) return true;
+		return false;
+	};
+
 	Simulator.prototype.setPlayer = function(user, slot) {
 		if (this.players[slot]) {
 			delete this.players[slot].battles[this.id];
@@ -209,9 +215,15 @@ var Simulator = (function(){
 			user.battles[this.id] = true;
 		}
 		this.players[slot] = (user || null);
+		var oldplayerid = this.playerids[slot];
+		if (oldplayerid) {
+			if (user) {
+				this.requests[user.userid] = this.requests[oldplayerid];
+			}
+			delete this.requests[oldplayerid];
+		}
 		this.playerids[slot] = (user ? user.userid : null);
 		this.playerTable = {};
-		this.requests = {};
 		this.active = !this.ended;
 		for (var i=0, len=this.players.length; i<len; i++) {
 			var player = this.players[i];

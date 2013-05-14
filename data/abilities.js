@@ -435,7 +435,9 @@ exports.BattleAbilities = {
 		shortDesc: "This Pokemon is healed 1/4 by Water, 1/8 by Rain; is hurt 1.25x by Fire, 1/8 by Sun.",
 		onTryHit: function(target, source, move) {
 			if (target !== source && move.type === 'Water') {
-				this.heal(target.maxhp/4);
+				if (!this.heal(target.maxhp/4)) {
+					this.add('-immune', target, '[msg]');
+				}
 				return null;
 			}
 		},
@@ -528,7 +530,9 @@ exports.BattleAbilities = {
 		shortDesc: "This Pokemon's Fire attacks do 1.5x damage if hit by one Fire move; Fire immunity.",
 		onTryHit: function(target, source, move) {
 			if (target !== source && move.type === 'Fire') {
-				target.addVolatile('flashfire');
+				if (!target.addVolatile('flashfire')) {
+					this.add('-immune', target, '[msg]');
+				}
 				return null;
 			}
 		},
@@ -709,7 +713,7 @@ exports.BattleAbilities = {
 			if (this.isWeather('sunnyday') || this.random(2) === 0) {
 				if (!pokemon.item && this.getItem(pokemon.lastItem).isBerry) {
 						pokemon.setItem(pokemon.lastItem);
-						this.add("-item", pokemon, pokemon.item, '[from] ability: Harvest');
+						this.add('-item', pokemon, pokemon.getItem(), '[from] ability: Harvest');
 				}
 			}
 		},
@@ -1073,7 +1077,9 @@ exports.BattleAbilities = {
 		shortDesc: "This Pokemon draws Electric moves to itself to boost Sp. Atk by 1; Electric immunity.",
 		onTryHit: function(target, source, move) {
 			if (target !== source && move.type === 'Electric') {
-				this.boost({spa:1});
+				if (!this.boost({spa:1})) {
+					this.add('-immune', target, '[msg]');
+				}
 				return null;
 			}
 		},
@@ -1300,7 +1306,9 @@ exports.BattleAbilities = {
 		shortDesc: "This Pokemon's Speed is boosted by 1 if hit by an Electric move; Electric immunity.",
 		onTryHit: function(target, source, move) {
 			if (target !== source && move.type === 'Electric') {
-				this.boost({spe:1});
+				if (!this.boost({spe:1})) {
+					this.add('-immune', target, '[msg]');
+				}
 				return null;
 			}
 		},
@@ -1818,7 +1826,9 @@ exports.BattleAbilities = {
 		shortDesc: "This Pokemon's Attack is boosted by 1 if hit by any Grass move; Grass immunity.",
 		onTryHit: function(target, source, move) {
 			if (target !== source && move.type === 'Grass') {
-				this.boost({atk:1});
+				if (!this.boost({atk:1})) {
+					this.add('-immune', target, '[msg]');
+				}
 				return null;
 			}
 		},
@@ -2165,7 +2175,9 @@ exports.BattleAbilities = {
 		shortDesc: "This Pokemon draws Water moves to itself to boost Sp. Atk by 1; Water immunity.",
 		onTryHit: function(target, source, move) {
 			if (target !== source && move.type === 'Water') {
-				this.boost({spa:1});
+				if (!this.boost({spa:1})) {
+					this.add('-immune', target, '[msg]');
+				}
 				return null;
 			}
 		},
@@ -2415,6 +2427,7 @@ exports.BattleAbilities = {
 			}
 			pokemon.addVolatile('truant');
 		},
+		onBeforeMovePriority: 99,
 		effect: {
 			duration: 2
 		},
@@ -2531,8 +2544,9 @@ exports.BattleAbilities = {
 		shortDesc: "This Pokemon heals 1/4 of its max HP when hit by Electric moves; Electric immunity.",
 		onTryHit: function(target, source, move) {
 			if (target !== source && move.type === 'Electric') {
-				var d = target.heal(target.maxhp/4);
-				this.add('-heal',target,target.getHealth,'[from] ability: Volt Absorb');
+				if (!this.heal(target.maxhp/4)) {
+					this.add('-immune', target, '[msg]');
+				}
 				return null;
 			}
 		},
@@ -2546,8 +2560,9 @@ exports.BattleAbilities = {
 		shortDesc: "This Pokemon heals 1/4 of its max HP when hit by Water moves; Water immunity.",
 		onTryHit: function(target, source, move) {
 			if (target !== source && move.type === 'Water') {
-				var d = target.heal(target.maxhp/4);
-				this.add('-heal',target,target.getHealth,'[from] ability: Water Absorb');
+				if (!this.heal(target.maxhp/4)) {
+					this.add('-immune', target, '[msg]');
+				}
 				return null;
 			}
 		},

@@ -139,7 +139,7 @@ exports.BattleMovedex = {
 		effect: {
 			onStart: function(pokemon, source) {
 				if (pokemon.volatiles['substitute']) {
-					this.add('-fail', target);
+					this.add('-fail', pokemon);
 					return false;
 				}
 				this.add('-start', pokemon, 'Curse', '[of] '+source);
@@ -257,23 +257,27 @@ exports.BattleMovedex = {
 				return this.random(4,9);
 			},
 			onStart: function(target) {
-				var noEncore = {encore:1,mimic:1,mirrormove:1,sketch:1,transform:1};
+				var noEncore = {encore:1, mimic:1, mirrormove:1, sketch:1, transform:1};
 				var moveIndex = target.moves.indexOf(target.lastMove);
 				if (!target.lastMove || noEncore[target.lastMove] || (target.moveset[moveIndex] && target.moveset[moveIndex].pp <= 0)) {
+					// it failed
 					this.add('-fail',target);
 					delete target.volatiles['encore'];
 					return;
 				}
 				this.effectData.move = target.lastMove;
 				this.add('-start', target, 'Encore');
-				if (this.willMove(target)) {
-					this.changeDecision(target, {move:this.effectData.move});
-				} else {
+				if (!this.willMove(target)) {
 					this.effectData.duration++;
 				}
 			},
+			onOverrideDecision: function(pokemon) {
+				return this.effectData.move;
+			},
+			onResidualOrder: 13,
 			onResidual: function(target) {
 				if (target.moves.indexOf(target.lastMove) >= 0 && target.moveset[target.moves.indexOf(target.lastMove)].pp <= 0) {
+					// early termination if you run out of PP
 					delete target.volatiles.encore;
 					this.add('-end', target, 'Encore');
 				}
@@ -289,16 +293,6 @@ exports.BattleMovedex = {
 					if (pokemon.moveset[i].id !== this.effectData.move) {
 						pokemon.moveset[i].disabled = true;
 					}
-				}
-			},
-			onBeforeTurn: function(pokemon) {
-				if (!this.effectData.move) {
-					// ???
-					return;
-				}
-				var decision = this.willMove(pokemon);
-				if (decision) {
-					this.changeDecision(pokemon, {move:this.effectData.move});
 				}
 			}
 		}
@@ -393,7 +387,7 @@ exports.BattleMovedex = {
 		inherit: true,
 		desc: "Raises the user's Special Attack by 1 stage.",
 		shortDesc: "Boosts the user's Sp. Atk by 1.",
-		onModifyMove: undefined,
+		onModifyMove: null,
 		boosts: {
 			spa: 1
 		}
@@ -455,23 +449,31 @@ exports.BattleMovedex = {
 			onStart: function(target) {
 				this.add('-singleturn', target, 'move: Magic Coat');
 			},
-			onAllyTryFieldHit: function(target, source, move) {
+			onTryHitPriority: 2,
+			onTryHit: function(target, source, move) {
 				if (target === source) return;
+				if (move.hasBounced) return;
 				if (typeof move.isBounceable === 'undefined') {
 					move.isBounceable = !!(move.category === 'Status' && (move.status || move.boosts || move.volatileStatus === 'confusion' || move.forceSwitch));
 				}
-				if (move.target !== 'foeSide' && target !== this.effectData.target) {
-					return;
+				if (move.isBounceable) {
+					var newMove = this.getMoveCopy(move.id);
+					newMove.hasBounced = true;
+					this.useMove(newMove, target, source);
+					return null;
 				}
-				if (move.hasBounced) {
-					return;
+			},
+			onAllyTryHitSide: function(target, source, move) {
+				if (target.side === source.side) return;
+				if (move.hasBounced) return;
+				if (typeof move.isBounceable === 'undefined') {
+					move.isBounceable = !!(move.category === 'Status' && (move.status || move.boosts || move.volatileStatus === 'confusion' || move.forceSwitch));
 				}
 				if (move.isBounceable) {
 					target.removeVolatile('MagicCoat');
 					var newMove = this.getMoveCopy(move.id);
 					newMove.hasBounced = true;
-					this.add('-activate', target, 'move: Magic Coat', newMove, '[of] '+source);
-					this.moveHit(source, target, newMove);
+					this.useMove(newMove, target, source);
 					return null;
 				}
 			}
@@ -602,22 +604,37 @@ exports.BattleMovedex = {
 	},
 	roost: {
 		inherit: true,
-		//desc: "",
 		effect: {
 			duration: 1,
-			onModifyPokemonPriority: 100,
-			onModifyPokemon: function(pokemon) {
+			onStart: function(pokemon) {
+				// This is not how Roost "should" be implemented, but is rather
+				// a simplification.
+
+				// This implementation has the advantage of not requiring a separate
+				// event just for Roost, and the only difference would come up in
+				// Doubles Hackmons. If we ever introduce Doubles Hackmons and
+				// Color Change Roost becomes popular; I might need to revisit this
+				// implementation. :P
+
 				if (pokemon.hasType('Flying')) {
 					// don't just delete the type; since
 					// the types array may be a pointer to the
 					// types array in the Pokedex.
+					this.effectData.oldTypes = pokemon.types;
 					if (pokemon.types[0] === 'Flying') {
+						// Pure Flying-types become ???-type
 						pokemon.types = [pokemon.types[1]];
 					} else {
 						pokemon.types = [pokemon.types[0]];
 					}
+					this.effectData.roostTypeString = pokemon.types.join(',');
 				}
 				//pokemon.negateImmunity['Ground'] = 1;
+			},
+			onEnd: function(pokemon) {
+				if (this.effectData.roostTypeString === pokemon.types.join(',')) {
+					pokemon.types = this.effectData.oldTypes;
+				}
 			}
 		}
 	},

@@ -1141,7 +1141,7 @@ exports.BattleMovedex = {
 				}
 				return 0;
 			},
-			onBasePower: function(basePower, target, source, move) {
+			onSourceBasePower: function(basePower, target, source, move) {
 				if (move.id === 'gust' || move.id === 'twister') {
 					return basePower * 2;
 				}
@@ -1583,7 +1583,7 @@ exports.BattleMovedex = {
 		shortDesc: "Traps and damages the target for 4-5 turns.",
 		id: "clamp",
 		name: "Clamp",
-		pp: 10,
+		pp: 15,
 		priority: 0,
 		isContact: true,
 		volatileStatus: 'partiallytrapped',
@@ -2309,7 +2309,7 @@ exports.BattleMovedex = {
 				}
 				return 0;
 			},
-			onBasePower: function(basePower, target, source, move) {
+			onSourceBasePower: function(basePower, target, source, move) {
 				if (move.id === 'earthquake' || move.id === 'magnitude') {
 					return basePower * 2;
 				}
@@ -2438,7 +2438,7 @@ exports.BattleMovedex = {
 				}
 				return 0;
 			},
-			onBasePower: function(basePower, target, source, move) {
+			onSourceBasePower: function(basePower, target, source, move) {
 				if (move.id === 'surf' || move.id === 'whirlpool') {
 					return basePower * 2;
 				}
@@ -3071,11 +3071,12 @@ exports.BattleMovedex = {
 				}
 				this.effectData.move = target.lastMove;
 				this.add('-start', target, 'Encore');
-				if (this.willMove(target)) {
-					this.changeDecision(target, {move:this.effectData.move});
-				} else {
+				if (!this.willMove(target)) {
 					this.effectData.duration++;
 				}
+			},
+			onOverrideDecision: function(pokemon) {
+				return this.effectData.move;
 			},
 			onResidualOrder: 13,
 			onResidual: function(target) {
@@ -3455,7 +3456,9 @@ exports.BattleMovedex = {
 		accuracy: 100,
 		basePower: 0,
 		damageCallback: function(pokemon) {
-			return pokemon.hp;
+			var damage = pokemon.hp;
+			pokemon.hp = 0;
+			return damage;
 		},
 		category: "Special",
 		desc: "Deals damage to one adjacent target equal to the user's current HP. If this move is successful, the user faints. Makes contact.",
@@ -3920,7 +3923,7 @@ exports.BattleMovedex = {
 				}
 				return 0;
 			},
-			onBasePower: function(basePower, target, source, move) {
+			onSourceBasePower: function(basePower, target, source, move) {
 				if (move.id === 'gust' || move.id === 'twister') {
 					return basePower * 2;
 				}
@@ -5051,6 +5054,22 @@ exports.BattleMovedex = {
 			onStart: function(pokemon) {
 				this.add('-start', pokemon, 'move: Heal Block');
 			},
+			onModifyPokemon: function(pokemon) {
+				var disabledMoves = {healingwish:1, lunardance:1, rest:1, swallow:1, wish:1};
+				var moves = pokemon.moveset;
+				for (var i=0; i<moves.length; i++) {
+					if (disabledMoves[moves[i].id] || this.getMove(moves[i].id).heal) {
+						pokemon.disabledMoves[moves[i].id] = true;
+					}
+				}
+			},
+			onBeforeMove: function(pokemon, target, move) {
+				var disabledMoves = {healingwish:1, lunardance:1, rest:1, swallow:1, wish:1};
+				if (disabledMoves[move.id] || move.heal) {
+					this.add('cant', pokemon, 'move: Heal Block', move);
+					return false;
+				}
+			},
 			onResidualOrder: 17,
 			onEnd: function(pokemon) {
 				this.add('-end', pokemon, 'move: Heal Block');
@@ -5857,12 +5876,6 @@ exports.BattleMovedex = {
 				if (target.lastMove === 'struggle') {
 					// don't lock
 					delete target.volatiles['iceball'];
-				}
-			},
-			onBeforeTurn: function(pokemon) {
-				if (pokemon.lastMove !== 'struggle') {
-					this.debug('Forcing into Ice Ball');
-					this.changeDecision(pokemon, {move: 'iceball'});
 				}
 			}
 		},
@@ -9203,6 +9216,13 @@ exports.BattleMovedex = {
 		num: 514,
 		accuracy: 100,
 		basePower: 70,
+		basePowerCallback: function(pokemon) {
+			if (pokemon.side.faintedLastTurn) {
+				this.debug('Boosted for a faint last turn');
+				return 140;
+			}
+			return 70;
+		},
 		category: "Physical",
 		desc: "Deals damage to one adjacent target. Power doubles if one of the user's party members fainted last turn. Makes contact.",
 		shortDesc: "Power doubles if an ally fainted last turn.",
@@ -9569,12 +9589,6 @@ exports.BattleMovedex = {
 				if (target.lastMove === 'struggle') {
 					// don't lock
 					delete target.volatiles['rollout'];
-				}
-			},
-			onBeforeTurn: function(pokemon) {
-				if (pokemon.lastMove !== 'struggle') {
-					this.debug('Forcing into Rollout');
-					this.changeDecision(pokemon, {move: 'rollout'});
 				}
 			}
 		},
@@ -12708,13 +12722,7 @@ exports.BattleMovedex = {
 			onEnd: function(target) {
 				this.add('-end', target, 'Uproar');
 			},
-			onLockMove: function(pokemon) {
-				return 'uproar';
-			},
-			onBeforeTurn: function(pokemon) {
-				this.debug('Forcing into uproar');
-				this.changeDecision(pokemon, {move: 'uproar'});
-			},
+			onLockMove: 'uproar',
 			onAnySetStatus: function(status, pokemon) {
 				if (status.id === 'slp') {
 					if (pokemon === this.effectData.target) {
@@ -13076,7 +13084,7 @@ exports.BattleMovedex = {
 		pp: 10,
 		priority: 0,
 		onModifyMove: function(move) {
-			switch (this.weather) {
+			switch (this.effectiveWeather()) {
 			case 'sunnyday':
 				move.type = 'Fire';
 				break;

@@ -1,10 +1,11 @@
-var crypto = require('crypto');
-
 var THROTTLE_DELAY = 900;
 
 var users = {};
 var prevUsers = {};
 var numUsers = 0;
+
+var bannedIps = {};
+var lockedIps = {};
 
 function getUser(name, exactName) {
 	if (!name || name === '!') return null;
@@ -28,36 +29,11 @@ function searchUser(name) {
 	return users[userid];
 }
 
-// This function is terrible code that doesn't work as the original author intended.
-function nameLock(user, name) {
-	var locks = Object.values(Object.select(nameLockedIps, user.ips));
-	if (locks.length > 0) {
-		// Arbitrarily pick the first lock if there is more than one...
-		return user.nameLock(locks[0]);
-	}
-	var userid = toUserid(name);
-	for (var i in nameLockedIps) {
-		if ((userid && toUserid(nameLockedIps[i]) === userid) || user.userid === toUserid(nameLockedIps[i])) {
-			for (var ip in user.ips) {
-				nameLockedIps[ip] = nameLockedIps[i];
-			}
-			return user.nameLock(nameLockedIps[i]);
-		}
-	}
-	return name || user.name;
-}
-
 function connectUser(socket, room) {
 	var connection = new Connection(socket, true);
-	if (connection.banned) return connection;
 	var user = new User(connection);
-	var nameSuggestion = nameLock(user);	// returns user.name if not namelocked
-	if (nameSuggestion !== user.name) {
-		user.rename(nameSuggestion);
-		user = connection.user;
-	}
 	// Generate 1024-bit challenge string.
-	crypto.randomBytes(128, function(ex, buffer) {
+	require('crypto').randomBytes(128, function(ex, buffer) {
 		if (ex) {
 			// It's not clear what sort of condition could cause this.
 			// For now, we'll basically assume it can't happen.
@@ -72,6 +48,7 @@ function connectUser(socket, room) {
 			connection.sendTo(null, '|challstr|' + keyid + '|' + connection.challenge);
 		}
 	});
+	user.joinRoom('global', connection);
 	if (room) {
 		user.joinRoom(room, connection);
 	}
@@ -150,7 +127,8 @@ var User = (function () {
 		this.ips = {}
 		this.ips[connection.ip] = 1;
 
-		this.muted = !!ipSearch(connection.ip, mutedIps);
+		this.muted = false;
+		this.locked = !!checkLocked(connection.ip);
 		this.prevNames = {};
 		this.battles = {};
 		this.roomCount = {};
@@ -178,13 +156,9 @@ var User = (function () {
 		
 		// initialize
 		users[this.userid] = this;
-		if (connection.banned) {
-			this.destroy();
-		}
 	}
 
 	User.prototype.blockChallenges = false;
-	User.prototype.blockLobbyChat = false;
 	User.prototype.lastConnected = 0;
 
 	User.prototype.emit = function(message, data) {
@@ -199,8 +173,7 @@ var User = (function () {
 	};
 	User.prototype.sendTo = function(roomid, data) {
 		if (roomid && roomid.id) roomid = roomid.id;
-		if (!roomid) roomid = 'lobby';
-		if (roomid !== 'lobby') data = '>'+roomid+'\n'+data;
+		if (roomid && roomid !== 'global' && roomid !== 'lobby') data = '>'+roomid+'\n'+data;
 		for (var i=0; i<this.connections.length; i++) {
 			if (roomid && !this.connections[i].rooms[roomid]) continue;
 			sendData(this.connections[i].socket, data);
@@ -208,8 +181,12 @@ var User = (function () {
 	};
 	//getIdentitychanges
 	User.prototype.getIdentity = function() {
+		if (this.locked) {
+			return '#'+this.name;
+		}
 		if (this.muted) {
 			return '!'+this.name;
+
 		} if(this.nameLocked()) {
 			return '#'+this.name;
 		} if(this.mark) {
@@ -346,7 +323,7 @@ var User = (function () {
 		var joining = !this.named;
 		this.named = (this.userid.substr(0,5) !== 'guest');
 		for (var i in this.roomCount) {
-			Rooms.get(i,'lobby').rename(this, oldid, joining);
+			Rooms.get(i,'lobby').onRename(this, oldid, joining);
 		}
 		return true;
 	};
@@ -385,7 +362,7 @@ var User = (function () {
 		}
 		this.named = false;
 		for (var i in this.roomCount) {
-			Rooms.get(i,'lobby').rename(this, oldid, false);
+			Rooms.get(i,'lobby').onRename(this, oldid, false);
 		}
 		return true;
 	};
@@ -414,7 +391,6 @@ var User = (function () {
 
 		if (!name) name = '';
 		name = toName(name);
-		name = nameLock(this,name);
 		var userid = toUserid(name);
 		if (this.authenticated) auth = false;
 
@@ -524,33 +500,9 @@ var User = (function () {
 			if (body !== '1') {
 				authenticated = true;
 
-				if (userid === "serei") avatar = 172;
-				else if (userid === "hobsgoblin") avatar = 52;
-				else if (userid === "ataraxia" || userid === "okuu") avatar = 1008;
-				else if (userid === "verbatim") avatar = 283;
-				else if (userid === "mortygymleader") avatar = 144;
-				else if (userid === "leadermorty") avatar = 144;
-				else if (userid === "leaderjasmine") avatar = 146;
-				else if (userid === "championcynthia") avatar = 260;
-				else if (userid === "aeo" || userid === "zarel") avatar = 167;
-				else if (userid === "aeo1") avatar = 167;
-				else if (userid === "aeo2") avatar = 166;
-				else if (userid === "sharktamer") avatar = 7;
-				else if (userid === "bmelts") avatar = 1004;
-				else if (userid === "n") avatar = 209;
-				else if (userid === "growlithe") avatar = 1007;
-				else if (userid === "v4") avatar = 94;
-				else if (userid === "hawntah") avatar = 161;
-				else if (userid === "greatsage") avatar = 1005;
-				else if (userid === "bojangles") avatar = 1006;
-				else if (userid === "dtc") avatar = 30;
-				else if (userid === "hugendugen") avatar = 1009;
-				else if (userid === "fatecrashers") avatar = 18;
-				else if (userid === "exeggutor") avatar = 1010;
-				else if (userid === "mjb") avatar = 1011;
-				else if (userid === "marty") avatar = 1012;
-				else if (userid === "theimmortal") avatar = 1013;
-				else if (userid === "aurora") avatar = 292;
+				if (config.customavatars && config.customavatars[userid]) {
+					avatar = config.customavatars[userid];
+				}
 
 				if (usergroups[userid]) {
 					group = usergroups[userid].substr(0,1);
@@ -564,7 +516,7 @@ var User = (function () {
 					return false;
 				}
 				for (var i in this.roomCount) {
-					Rooms.get(i,'lobby').leave(this);
+					Rooms.get(i,'lobby').onLeave(this);
 				}
 				if (!user.authenticated) {
 					if (Object.isEmpty(Object.select(this.ips, user.ips))) {
@@ -633,11 +585,15 @@ var User = (function () {
 		});
 		connection.user = this;
 		for (var i in connection.rooms) {
+			var room = connection.rooms[i];
 			if (!this.roomCount[i]) {
-				connection.rooms[i].join(this);
+				room.onJoin(this, true);
 				this.roomCount[i] = 0;
 			}
 			this.roomCount[i]++;
+			if (room.battle) {
+				room.battle.resendRequest(this);
+			}
 		}
 	};
 	User.prototype.debugData = function() {
@@ -682,7 +638,7 @@ var User = (function () {
 				}
 				connection = this.connections[i];
 				for (var j in connection.rooms) {
-					this.leaveRoom(connection.rooms[j], socket);
+					this.leaveRoom(connection.rooms[j], socket, true);
 				}
 				connection.user = null;
 				--this.ips[connection.ip];
@@ -696,7 +652,7 @@ var User = (function () {
 				if (this.roomCount[i] > 0) {
 					// should never happen.
 					console.log('!! room miscount: '+i+' not left');
-					Rooms.get(i,'lobby').leave(this);
+					Rooms.get(i,'lobby').onLeave(this);
 				}
 			}
 			this.roomCount = {};
@@ -758,47 +714,6 @@ var User = (function () {
 			this.mmrCache[formatid] = (parseInt(mmr.r,10) + parseInt(mmr.rpr,10))/2;
 		}
 	};
-	User.prototype.nameLock = function(targetName, recurse) {
-		var targetUser = getUser(targetName);
-		if (!targetUser) return targetName;
-		if ((Object.values(Object.select(nameLockedIps, this.ips)).indexOf(targetName) < 0) &&
-				targetUser.connected &&
-				Object.isEmpty(Object.select(this.ips, targetUser.ips))) {
-			return targetName;
-		}
-		for (var ip in this.ips) {
-			nameLockedIps[ip] = targetName;
-		}
-		if (!recurse) return targetName;
-		for (var i in users) {
-			if (users[i] === this) continue;
-			if (Object.isEmpty(Object.select(this.ips, users[i].ips))) continue;
-			users[i].destroy();
-		}
-		this.forceRename(targetName, this.authenticated);
-		return targetName;
-	};
-	User.prototype.nameLocked = function() {
-		var locks = Object.values(Object.select(nameLockedIps, this.ips));
-		if (locks.length > 0) {
-			// If the user is locked to more than one name (it's not obvious
-			// whether this is possible), just arbitrarily pick the first one.
-			this.nameLock(locks[0]);
-			return true;
-		}
-		// This code attempts to catch namelocked users logging in from another
-		// IP, and thereby add that IP to the list of namelocked IPs. However,
-		// this code is terrible and doesn't actually work as designed.
-		for (var i in nameLockedIps) {
-			if (nameLockedIps[i] !== this.name) continue;
-			for (var ip in this.ips) {
-				nameLockedIps[ip] = nameLockedIps[i];
-			}
-			this.nameLock(this.name);
-			return true;
-		}
-		return false;
-	};
 	User.prototype.ban = function(noRecurse) {
 		// no need to recurse, since the root for-loop already bans everything with your IP
 		if (!noRecurse) for (var i in users) {
@@ -811,6 +726,18 @@ var User = (function () {
 		}
 		this.destroy();
 	};
+	User.prototype.lock = function(noRecurse) {
+		// no need to recurse, since the root for-loop already bans everything with your IP
+		if (!noRecurse) for (var i in users) {
+			if (users[i] === this) continue;
+			if (Object.isEmpty(Object.select(this.ips, users[i].ips))) continue;
+			users[i].lock(true);
+		}
+		for (var ip in this.ips) {
+			lockedIps[ip] = this.userid;
+		}
+		this.locked = true;
+	};
 	User.prototype.destroy = function() {
 		// Disconnects a user from the server
 		this.destroyChatQueue();
@@ -821,13 +748,9 @@ var User = (function () {
 			connection = this.connections[i];
 			connection.user = null;
 			for (var j in connection.rooms) {
-				this.leaveRoom(connection.rooms[j], connection);
+				this.leaveRoom(connection.rooms[j], connection, true);
 			}
-			if (config.protocol === 'io') {
-				connection.socket.disconnect();
-			} else {
-				connection.socket.end();
-			}
+			connection.socket.end();
 			--this.ips[connection.ip];
 		}
 		this.connections = [];
@@ -841,8 +764,7 @@ var User = (function () {
 		}
 	};
 	User.prototype.joinRoom = function(room, socket) {
-		roomid = room?(room.id||room):'';
-		room = Rooms.get(room,'lobby');
+		room = Rooms.get(room);
 		if (!room) return false;
 		var connection = null;
 		//console.log('JOIN ROOM: '+this.userid+' '+room.id);
@@ -850,7 +772,7 @@ var User = (function () {
 			for (var i=0; i<this.connections.length;i++) {
 				// only join full clients, not pop-out single-room
 				// clients
-				if (this.connections[i].rooms['lobby']) {
+				if (this.connections[i].rooms['global']) {
 					this.joinRoom(room, this.connections[i]);
 				}
 			}
@@ -859,8 +781,7 @@ var User = (function () {
 			connection = socket;
 			socket = connection.socket;
 		}
-		if (!socket) return false;
-		else if (!connection) {
+		if (!connection) {
 			connection = this.getConnectionFromSocket(socket);
 			if (!connection) return false;
 		}
@@ -868,25 +789,29 @@ var User = (function () {
 			connection.rooms[room.id] = room;
 			if (!this.roomCount[room.id]) {
 				this.roomCount[room.id]=1;
-				room.join(this);
+				room.onJoin(this);
 			} else {
 				this.roomCount[room.id]++;
-				room.initSocket(this, socket);
+				room.onJoinSocket(this, socket);
 			}
 		} else if (room.id === 'lobby') {
-			emit(connection.socket, 'init', {room: roomid, notFound: true});
+			emit(connection.socket, 'init', {room: room.id, notFound: true});
 		}
 		return true;
 	};
-	User.prototype.leaveRoom = function(room, socket) {
+	User.prototype.leaveRoom = function(room, socket, force) {
 		room = Rooms.get(room);
+		if (room.id === 'global' && !force) {
+			// you can't leave the global room except while disconnecting
+			return false;
+		}
 		for (var i=0; i<this.connections.length; i++) {
 			if (this.connections[i] === socket || this.connections[i].socket === socket || !socket) {
 				if (this.connections[i].rooms[room.id]) {
 					if (this.roomCount[room.id]) {
 						this.roomCount[room.id]--;
 						if (!this.roomCount[room.id]) {
-							room.leave(this);
+							room.onLeave(this);
 							delete this.roomCount[room.id];
 						}
 					}
@@ -906,7 +831,7 @@ var User = (function () {
 			}
 		}
 		if (!socket && this.roomCount[room.id]) {
-			room.leave(this);
+			room.onLeave(this);
 			delete this.roomCount[room.id];
 		}
 	};
@@ -975,7 +900,7 @@ var User = (function () {
 			}
 			return false;
 		}
-		Rooms.get('lobby').startBattle(this, user, user.challengeTo.format, false, this.team, user.team);
+		Rooms.global.startBattle(this, user, user.challengeTo.format, false, this.team, user.team);
 		delete this.challengesFrom[user.userid];
 		user.challengeTo = null;
 		this.updateChallenges();
@@ -1055,12 +980,6 @@ var Connection = (function () {
 		if (socket.remoteAddress) {
 			this.ip = socket.remoteAddress;
 		}
-
-		if (ipSearch(this.ip,bannedIps)) {
-			// gonna kill this
-			this.banned = true;
-			this.user = null;
-		}
 	}
 
 	Connection.prototype.sendTo = function(roomid, data) {
@@ -1070,6 +989,8 @@ var Connection = (function () {
 	};
 	return Connection;
 })();
+
+// ban functions
 
 function ipSearch(ip, table) {
 	if (table[ip]) return true;
@@ -1081,16 +1002,69 @@ function ipSearch(ip, table) {
 	}
 	return false;
 }
+function checkBanned(ip) {
+	return ipSearch(ip, bannedIps);
+}
+function checkLocked(ip) {
+	return ipSearch(ip, lockedIps);
+}
+exports.checkBanned = checkBanned;
+exports.checkLocked = checkLocked;
 
+function unban(name) {
+	var userid = toId(name);
+	for (var ip in bannedIps) {
+		if (Users.bannedIps[ip] === userid) {
+			delete Users.bannedIps[ip];
+			success = true;
+		}
+	}
+	if (success) return name;
+	return false;
+}
+function unlock(name, unlocked, noRecurse) {
+	var userid = toId(name);
+	var user = getUser(userid);
+	var userips = null;
+	if (user) {
+		if (user.userid === userid) name = user.name;
+		if (user.locked) {
+			user.locked = false;
+			unlocked = unlocked || {};
+			unlocked[name] = 1;
+		}
+		if (!noRecurse) userips = user.ips;
+	}
+	for (var ip in lockedIps) {
+		if (userips && (ip in user.ips) && Users.lockedIps[ip] !== userid) {
+			unlocked = unlock(Users.lockedIps[ip], unlocked, true); // avoid infinite recursion
+		}
+		if (Users.lockedIps[ip] === userid) {
+			delete Users.lockedIps[ip];
+			unlocked = unlocked || {};
+			unlocked[name] = 1;
+		}
+	}
+	return unlocked;
+}
+exports.unban = unban;
+exports.unlock = unlock;
+
+exports.User = User;
+exports.Connection = Connection;
 exports.get = getUser;
 exports.getExact = getExactUser;
 exports.searchUser = searchUser;
 exports.connectUser = connectUser;
-exports.users = users;
-exports.prevUsers = prevUsers;
 exports.importUsergroups = importUsergroups;
 exports.addBannedWord = addBannedWord;
 exports.removeBannedWord = removeBannedWord;
+
+exports.users = users;
+exports.prevUsers = prevUsers;
+
+exports.bannedIps = bannedIps;
+exports.lockedIps = lockedIps;
 
 exports.usergroups = usergroups;
 

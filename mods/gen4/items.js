@@ -1,4 +1,16 @@
 exports.BattleItems = {
+	"choiceband": {
+		inherit: true,
+		onStart: null
+	},
+	"choicescarf": {
+		inherit: true,
+		onStart: null
+	},
+	"choicespecs": {
+		inherit: true,
+		onStart: null
+	},
 	"custapberry": {
 		id: "custapberry",
 		name: "Custap Berry",
@@ -39,6 +51,15 @@ exports.BattleItems = {
 			}
 		},
 		desc: "Activates at 25% HP. Next move used goes first. One-time use."
+	},
+	"lifeorb": {
+		inherit: true,
+		onBasePower: function(basePower, user, target) {
+			if (!target.volatiles['substitute']) {
+				user.addVolatile('lifeorb');
+			}
+			return basePower * 1.3;
+		}
 	},
 	"mentalherb": {
 		id: "mentalherb",

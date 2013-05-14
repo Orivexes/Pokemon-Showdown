@@ -17,10 +17,6 @@ exports.port = 8000;
 //          This feature should be used with caution.
 exports.setuid = '';
 
-// protocol - WebSockets ("ws") or Socket.IO ("io").
-//   We recommend using WebSockets unless you have a really compelling reason not to.
-exports.protocol = 'ws';
-
 // The server ID - a unique ID describing this Showdown server
 exports.serverid = 'testserver';
 
@@ -37,9 +33,7 @@ exports.servertoken = 'exampletoken-382hgraw4jr2tioq';
 
 // Proxy IP - a list of proxy IPs with trusted X-Forwarded-For headers
 //   The list can be an array, or a string with whatever delimiter you wish.
-//   Leave at false to never trust any proxy. Set to true to trust all
-//   proxies. DO NOT SET TO TRUE UNLESS YOU ARE SURE YOU ARE BEHIND A
-//   TRUSTED PROXY.
+//   Leave at false to never trust any proxy.
 exports.proxyip = false;
 
 // login server data - don't forget the http:// and the trailing slash
@@ -69,6 +63,27 @@ exports.potd = '';
 //   Unfortunately, socket.io bug 409 requires some sort of crash guard
 //   https://github.com/LearnBoost/socket.io/issues/609
 exports.crashguard = true;
+
+// crashguardemail - if the server has been running for more than an hour
+// and crashes, send an email using these settings, rather than locking down
+// the server. Uncomment this definition if you wan to use this feature;
+// otherwise, all crashes will lock down the server.
+/**exports.crashguardemail = {
+	transport: 'SMTP',
+	options: {
+		host: 'mail.example.com',
+		port: 465,
+		secureConnection: true,
+		maxConnections: 1,
+		auth: {
+			user: 'example@domain.com',
+			pass: 'password'
+		}
+	},
+	from: 'crashlogger@example.com',
+	to: 'admin@example.com',
+	subject: 'Pokemon Showdown has crashed!'
+};**/
 
 // report joins and leaves - shows messages like "<USERNAME> joined"
 //   Join and leave messages are small and consolidated, so there will never
@@ -142,6 +157,32 @@ exports.blacklist = [
 	/\bnimp\.org\b/
 ];
 
+// reportbattlesperiod - by default, all battles are reported to clients
+// even if `reportbattles` is off. If you set this option to a value other
+// then false, then most battles will not be reported at all. Instead,
+// every so often the server will send information on the last 6 battles
+// to all clients; the `reportbattlesperiod` option specifies the length of
+// the period between reports in milliseconds.
+//
+// You should probably leave this value at `false`. It is only really
+// intended to be used by a busy server with thousands of concurrent users.
+exports.reportbattlesperiod = false;
+
+// Set this to true if you are using Pokemon Showdown on Heroku.
+exports.herokuhack = false;
+
+// Custom avatars.
+// This allows you to specify custom avatar images for users on your server.
+// Place custom avatar files under the /config/avatars/ directory.
+// Users must be specified as userids -- that is, you must make the name all
+// lowercase and remove non-alphanumeric characters.
+//
+// Your server *must* be registered in order for your custom avatars to be
+// displayed in the client.
+exports.customavatars = {
+	//'userid': 'customavatar.png'
+};
+
 // permissions and groups:
 //   Each entry in `groupsranking' specifies the ranking of the groups.
 //   Each entry in `groups' is a seperate group. Some of the members are "special"
@@ -197,7 +238,6 @@ exports.groups = {
 		declare: true,
 		modchatall: true,
 		potd: true,
-		namelock: true,
 		forcerenameto: true,
 		disableladder: true,
 		rank: 4
@@ -224,6 +264,7 @@ exports.groups = {
 		announce: true,
 		warn: true,
 		mute: true,
+		lock: true,
 		forcerename: true,
 		timer: true,
 		alts: '%u',

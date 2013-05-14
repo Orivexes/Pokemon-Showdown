@@ -113,11 +113,6 @@ exports.BattleStatuses = {
 			this.add('-status', target, 'tox');
 			this.effectData.stage = 0;
 		},
-		onSwitchIn: function(pokemon) {
-			this.effectData.stage = 0;
-			//pokemon.cureStatus();
-			pokemon.setStatus('psn');
-		},
 		onAfterMoveSelf: function(pokemon) {
 			if (this.effectData.stage < 15) {
 				this.effectData.stage++;
@@ -125,11 +120,11 @@ exports.BattleStatuses = {
 			this.damage(clampIntRange(pokemon.maxhp/16, 1)*this.effectData.stage);
 		},
 		onSwitchIn: function (pokemon) {
+			this.effectData.stage = 0; // probably unnecessary...
+			pokemon.setStatus('psn');
+			// normal poison damage...
 			if (pokemon.side.foe.active[0] && pokemon.speed <= pokemon.side.foe.active[0].speed) {
-				if (this.effectData.stage < 15) {
-					this.effectData.stage++;
-				}
-				this.damage(clampIntRange(pokemon.maxhp/16, 1)*this.effectData.stage);
+				this.damage(pokemon.maxhp/16);
 			}
 		}
 	},
@@ -225,16 +220,7 @@ exports.BattleStatuses = {
 		onStart: function(target, source, effect) {
 			this.effectData.move = 'rage';
 		},
-		onLockMove: function(pokemon) {
-			return 'rage';
-		},
-		onBeforeTurn: function(pokemon) {
-			var move = this.getMove('rage');
-			if (move.id) {
-				this.debug('Forcing into rage');
-				this.changeDecision(pokemon, {move: move.id});
-			}
-		},
+		onLockMove: 'rage',
 		onTryHit: function(target, source, move) {
 			if (target.boosts.atk < 6 && move.id === 'disable') {
 				this.boost({atk:1});

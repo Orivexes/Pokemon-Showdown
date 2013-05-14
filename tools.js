@@ -1,5 +1,5 @@
 module.exports = (function () {
-	var dataTypes = ['Pokedex', 'Movedex', 'Statuses', 'TypeChart', 'Scripts', 'Items', 'Abilities', 'Formats', 'FormatsData', 'Learnsets', 'Aliases'];
+	var dataTypes = ['FormatsData', 'Learnsets', 'Pokedex', 'Movedex', 'Statuses', 'TypeChart', 'Scripts', 'Items', 'Abilities', 'Formats', 'Aliases'];
 	var dataFiles = {
 		'Pokedex': 'pokedex.js',
 		'Movedex': 'moves.js',
@@ -63,9 +63,14 @@ module.exports = (function () {
 					if (Data[mod][dataType][i] === null) {
 						// null means don't inherit
 						delete Data[mod][dataType][i];
-					} else if (typeof Data[mod][dataType][i] === 'undefined') {
-						// If it doesn't exist is inherited from the base data
-						Data[mod][dataType][i] = Object.clone(Data.base[dataType][i], true);
+					} else if (!(i in Data[mod][dataType])) {
+						// If it doesn't exist it's inherited from the base data
+						if (dataType === 'Pokedex') {
+							// Pokedex entries can be modified too many different ways
+							Data[mod][dataType][i] = Object.clone(Data.base[dataType][i], true);
+						} else {
+							Data[mod][dataType][i] = Data.base[dataType][i];
+						}
 					} else if (Data[mod][dataType][i] && Data[mod][dataType][i].inherit) {
 						// {inherit: true} can be used to modify only parts of the base data,
 						// instead of overwriting entirely
@@ -85,6 +90,11 @@ module.exports = (function () {
 		}
 		if (!mod) mod = 'base';
 		return moddedTools[mod];
+	};
+	Tools.prototype.modData = function(dataType, id) {
+		if (this.isBase) return this.data[dataType][id];
+		if (this.data[dataType][id] !== moddedTools.base.data[dataType][id]) return this.data[dataType][id];
+		return this.data[dataType][id] = Object.clone(this.data[dataType][id], true);
 	};
 
 	Tools.prototype.effectToString = function() {
@@ -125,6 +135,8 @@ module.exports = (function () {
 			template = {};
 			if (id && this.data.Pokedex[id]) {
 				template = this.data.Pokedex[id];
+				if (template.cached) return template;
+				template.cached = true;
 				template.exists = true;
 			}
 			name = template.species || template.name || name;
@@ -177,6 +189,8 @@ module.exports = (function () {
 			}
 			if (id && this.data.Movedex[id]) {
 				move = this.data.Movedex[id];
+				if (move.cached) return move;
+				move.cached = true;
 				move.exists = true;
 			}
 			if (!move.id) move.id = id;
@@ -265,6 +279,8 @@ module.exports = (function () {
 			effect = {};
 			if (id && this.data.Formats[id]) {
 				effect = this.data.Formats[id];
+				if (effect.cached) return effect;
+				effect.cached = true;
 				effect.name = effect.name || this.data.Formats[id].name;
 				if (!effect.mod) effect.mod = this.currentMod;
 				if (!effect.effectType) effect.effectType = 'Format';
@@ -290,6 +306,8 @@ module.exports = (function () {
 			item = {};
 			if (id && this.data.Items[id]) {
 				item = this.data.Items[id];
+				if (item.cached) return item;
+				item.cached = true;
 				item.exists = true;
 			}
 			if (!item.id) item.id = id;
@@ -299,6 +317,12 @@ module.exports = (function () {
 			if (!item.category) item.category = 'Effect';
 			if (!item.effectType) item.effectType = 'Item';
 			if (item.isBerry) item.fling = { basePower: 10 };
+			if (!item.gen) {
+				if (item.num >= 537) item.gen = 5;
+				else if (item.num >= 377) item.gen = 4;
+				// Due to difference in storing items, gen 2 items must be specified specifically
+				else item.gen = 3;
+			}
 		}
 		return item;
 	};
@@ -309,6 +333,8 @@ module.exports = (function () {
 			ability = {};
 			if (id && this.data.Abilities[id]) {
 				ability = this.data.Abilities[id];
+				if (ability.cached) return ability;
+				ability.cached = true;
 				ability.exists = true;
 			}
 			if (!ability.id) ability.id = id;
@@ -333,6 +359,8 @@ module.exports = (function () {
 			type = {};
 			if (id && this.data.TypeChart[id]) {
 				type = this.data.TypeChart[id];
+				if (type.cached) return type;
+				type.cached = true;
 				type.exists = true;
 				type.isType = true;
 				type.effectType = 'Type';
@@ -462,6 +490,7 @@ module.exports = (function () {
 							if (learned.substr(1,1) === 'E') {
 								// it's an egg move, so we add each pokemon that can be bred with to its sources
 								var eggGroups = template.eggGroups;
+								if (!eggGroups) continue;
 								if (eggGroups[0] === 'No Eggs') eggGroups = this.getTemplate(template.evos[0]).eggGroups;
 								var atLeastOne = false;
 								var fromSelf = (learned.substr(1) === 'Eany');
@@ -725,7 +754,7 @@ module.exports = (function () {
 		}
 		set.species = template.species;
 
-		set.name = toName(set.name).trim().replace(/\|/g,'');
+		set.name = toName(set.name);
 		var item = this.getItem(string(set.item));
 		set.item = item.name;
 		var ability = this.getAbility(string(set.ability));
@@ -734,15 +763,15 @@ module.exports = (function () {
 
 		var maxLevel = format.maxLevel || 100;
 		var maxForcedLevel = format.maxForcedLevel || maxLevel;
+		if (!set.level) {
+			set.level = (format.defaultLevel || maxLevel);
+		}
 		if (format.forcedLevel) {
 			set.forcedLevel = format.forcedLevel;
-		} else if ((set.level || maxLevel) >= maxForcedLevel) {
+		} else if (set.level >= maxForcedLevel) {
 			set.forcedLevel = maxForcedLevel;
 		}
-		if (!set.level) {
-			set.level = 100;
-		}
-		if (set.level > maxLevel || set.level == set.forcedLevel) {
+		if (set.level > maxLevel || set.level == set.forcedLevel || set.level == set.maxForcedLevel) {
 			set.level = maxLevel;
 		}
 
@@ -788,6 +817,9 @@ module.exports = (function () {
 		if (banlistTable['illegal']) {
 			var totalEV = 0;
 			for (var k in set.evs) {
+				if (typeof set.evs[k] !== 'number') {
+					set.evs[k] = 0;
+				}
 				totalEV += set.evs[k];
 			}
 			if (totalEV > 510) {
